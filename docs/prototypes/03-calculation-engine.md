@@ -138,10 +138,52 @@ Include a property sale and a large one-time expenditure somewhere in the trajec
 
 ## Questions to record after the prototype
 
-- Is the month-by-month calculation model natural?
-- Does Event remain the right primitive once asset behavior is implemented?
-- Where does calculation complexity actually concentrate?
-- Are Policies sufficiently independent from Assets?
-- Does Whole Life fit without special cases?
-- Is the pure functional design pleasant to test and modify?
-- What would have to change to run 10,000 calculations?
+- **Is the month-by-month calculation model natural?** Yes — one pass per month
+  (asset growth → events → income → policies → leftover-to-cash) reads like a
+  straightforward loop, and every acceptance criterion around monthly coherence and
+  annual derivation fell out of that structure directly rather than needing separate
+  bookkeeping.
+- **Does Event remain the right primitive once asset behavior is implemented?**
+  Mostly, with a nuance: a recurring 401(k) withdrawal didn't need a dedicated effect
+  type at all — it was just two ordinary Events with matching timing (`assetDelta`
+  -3000, `cashDelta` +3000) firing the same month. Only Whole Life's policy loan
+  genuinely needed a dedicated effect (`wholeLifePolicyLoan`), because it touches a
+  field — `policyLoanBalance` — nothing else has, not because loans are conceptually
+  special. `wholeLifeWithdrawal` probably didn't need to be distinct either, in
+  hindsight; it could have been the same two-event composition as the 401(k) draw.
+- **Where does calculation complexity actually concentrate?** In the Policy layer,
+  not Assets. Every `applyAssetBehavior` case is 3-5 lines. The genuinely fiddly code
+  was deciding what's mandatory (tax, the mortgage's *regular* payment) versus
+  policy-claimed (spending, *extra* mortgage principal, investing surplus) — that
+  split isn't in the docs and had to be inferred.
+- **Are Policies sufficiently independent from Assets?** Yes. No policy handler
+  branches on asset kind beyond "find the one called cash" / "find a mortgage" —
+  swapping `payMortgage` and `investSurplus` priority changes the resulting
+  `FinancialState` with zero change to `calculate()` (tested directly).
+- **Does Whole Life fit without special cases?** Yes for monthly behavior — it's one
+  more case in the same switch as every other asset, same shape (crediting rate +
+  dividend-as-PUA, both compounding internally; a flat fee, same as everything else
+  being a per-kind number in `parameters`). The one real asymmetry is
+  `policyLoanBalance`, an extra field no other asset needs — that's a legitimate
+  Whole-Life-specific shape difference, not an engine special case.
+- **Is the pure functional design pleasant to test and modify?** Yes — every test in
+  `assetBehavior.test.ts` and `policies.test.ts` calls a function with plain data and
+  asserts on plain data, no setup/teardown, no mocking. The determinism and
+  Input-Generator-swap acceptance criteria were the easiest tests to write in the
+  whole prototype series, precisely because there was no hidden state to control for.
+- **What would have to change to run 10,000 calculations?** Nothing structurally —
+  `calculate()` already takes a `parameterProvider` instead of reading constants
+  directly, so a Monte Carlo Input Generator drops in without touching the engine
+  (exercised directly by the Input-Generator-swap test). The real cost is
+  performance: this prototype rebuilds fresh objects for every asset/liability every
+  month via spreads, which is fine at 180 months but would need profiling before
+  trusting it at 10,000 simulation runs × 180 months each.
+
+An unanticipated finding worth carrying forward: the doc's suggested policy list
+("spending, maintain cash reserve, pay mortgage, invest surplus") reads like four
+peers, but they're not — `spending` and `payMortgage`'s *extra* payments are genuinely
+optional/reorderable claims on surplus, while the mortgage's *regular* scheduled
+payment turned out to be mandatory and outside the policy system entirely, same as
+tax. The doc doesn't distinguish "mandatory outflow" from "policy-claimed surplus,"
+and getting that split right was the single trickiest design decision in this
+prototype — worth stating explicitly in the eventual product spec.
