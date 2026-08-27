@@ -104,9 +104,44 @@ Do not put financial calculation logic into the UI.
 
 ## Questions to record after the prototype
 
-- Does the card-on-canvas metaphor actually work?
-- Is the distinction between Master and Alternatives intuitive?
-- Which Scenario properties need to be editable directly on the card?
-- Which changes should be instant versus requiring an explicit recalculate action?
-- What information does the user need to understand why net worth changed?
-- Does comparison need to be a separate mode or part of the main view?
+- **Does the card-on-canvas metaphor actually work?** Basically yes, even in this
+  prototype's cheapest possible version (a horizontal row of boxes, no drag). Seeing
+  the cards next to their chart, and watching the chart redraw the instant a card
+  changes, is what makes the timeline read as "one editable plan" rather than a form.
+  The thing that's still unproven is drag-to-resize specifically (this prototype used
+  a ±1-month stepper instead) — that's a real UI engineering project on its own and
+  deserves its own pass before betting the interaction model on it.
+- **Is the distinction between Master and Alternatives intuitive?** The mechanics are
+  sound (duplicate, edit independently, promote) and the isolation is real, not just
+  presented — but a plain list with a "Master" badge and checkboxes is doing the
+  minimum, not proving intuitiveness. That needs an actual user in front of it, not
+  just an engineer confirming the state management is correct.
+- **Which Scenario properties need to be editable directly on the card?** Name and
+  total monthly spending turned out to be enough to make edits feel meaningful and
+  see them move the chart. Income, individual Events, and Policy priority all stayed
+  edit-only-in-code for this prototype — putting those on the card is real UI design
+  work (probably not more fields on the same card, more likely a detail panel).
+- **Which changes should be instant versus requiring an explicit recalculate
+  action?** Answered directly: instant, always. `useMemo` keyed on the Trajectory
+  object means recalculation happens automatically and cheaply on every edit — there
+  was never a reason to add a "Recalculate" button, and the immutable-by-construction
+  design from 02/03 is exactly what makes that free.
+- **What information does the user need to understand why net worth changed?** This
+  prototype doesn't answer it — the line just moves. Watching the demo trajectory,
+  the honest gap is clear: a user editing a card has no way to see *why* the
+  projection moved (which policy claimed the surplus, whether an Event fired, whether
+  a shortfall occurred) without reading the composition chart and doing the math
+  themselves. That's probably the single most important next UI question.
+- **Does comparison need to be a separate mode or part of the main view?** Part of
+  the main view worked fine here — a checkbox per Trajectory, overlaid lines with a
+  legend. No separate "compare mode" was needed for 2-3 Trajectories; that question
+  would resurface if the number of Alternatives grew much larger.
+
+An unanticipated finding: this was the only prototype where a real rendering bug
+surfaced in end-to-end verification that the type system and unit tests both missed —
+a cash shortfall (a legitimate state the calculation engine allows) produced a
+negative asset value, which produced an invalid negative SVG `height` attribute,
+silently failing to render that bar rather than crashing. Caught only by actually
+loading the page in a browser and checking the console, not by `tsc` or `vitest` —
+a concrete instance of why "start the dev server and look at it" is a separate step
+from "the tests pass."
