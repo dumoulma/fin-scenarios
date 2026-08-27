@@ -93,8 +93,41 @@ Create at least two Alternative Trajectories from the same Master and make indep
 
 ## Questions to record after the prototype
 
-- Is Event sufficiently expressive, or are some asset behaviors better modeled differently?
-- Is the Scenario data structure becoming too broad?
-- Are policies naturally composable?
-- Is Scenario reuse actually useful or does copying dominate?
-- Are Trajectory transformations pleasant enough to support the eventual canvas UI?
+- **Is Event sufficiently expressive, or are some asset behaviors better modeled
+  differently?** Untested here on purpose — Events stayed purely descriptive (just a
+  name and timing shape), no financial effect attached, since that's calculation
+  engine territory (prototype 03). What this prototype does show: three timing shapes
+  (instantaneous/recurring/durationBased) were enough to express every example event
+  in the doc without needing a fourth kind.
+- **Is the Scenario data structure becoming too broad?** No — five fields
+  (start/end/events/policies/parameters) stayed enough for both test scenarios.
+- **Are policies naturally composable?** Untested for real — they're inert data here
+  (`{ id, kind, priority }`), never evaluated. Real composability (does changing
+  priority order actually change outcomes without changing the calculation) is
+  prototype 03's question, not this one's.
+- **Is Scenario reuse actually useful or does copying dominate?** Copying dominated in
+  this prototype, but that may be an artifact of the design, not the domain: a
+  Trajectory holds full Scenario values rather than references into a shared library
+  (see below), so every placement is structurally a copy already.
+- **Are Trajectory transformations pleasant enough to support the eventual canvas
+  UI?** Broadly yes for the 8 required operations, but resize needed a real design
+  call to feel right — see below.
+
+Design decisions this prototype had to make that the doc left ambiguous, worth
+revisiting before prototype 04 builds a UI on top of them:
+
+- The doc puts `start`/`end` directly on Scenario, but also says Scenarios have
+  "stable identity" and are "reusable" across Trajectories — those pull in different
+  directions, since baked-in absolute dates can't be the same object placed at two
+  different times. This prototype resolved it by making Trajectory hold full Scenario
+  *values* (not references into a shared library) and treating "reuse" as
+  duplicate-then-place. That's simple and testable, but it means there's no actual
+  Scenario Library yet, and no way to see "this Scenario is used in 3 Trajectories" —
+  worth deciding explicitly before the canvas UI needs that information.
+- Resize turned out to have two plausible interpretations: cascade the whole
+  downstream timeline, or drag just the shared boundary with the immediate neighbor.
+  This prototype implemented the latter (a Scenario's neighbor absorbs the
+  change, nothing further away moves) because it reads closer to "manipulable cards"
+  than a full re-flow — but a real user dragging a card edge might expect the whole
+  timeline to compress/expand instead. This is a genuine UX question, not just an
+  implementation detail, and worth validating once there's a canvas to try it on.
