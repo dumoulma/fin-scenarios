@@ -12,8 +12,9 @@ import {
   replaceScenario,
   resizeScenario,
 } from '../domain/trajectoryOps.ts'
-import { alternativeATrajectory, alternativeBTrajectory, alternativeCTrajectory, initialState, masterTrajectory } from '../domain/sampleData.ts'
+import { alternativeATrajectory, alternativeBTrajectory, alternativeCTrajectory, droppedForCurrency, importSummary, initialState, masterTrajectory } from '../domain/appData.ts'
 import { AssetsLiabilitiesChart } from './AssetsLiabilitiesChart.tsx'
+import { ImportSummaryPanel } from './ImportSummaryPanel.tsx'
 import { NetWorthChart, type NetWorthSeries } from './NetWorthChart.tsx'
 import { TrajectoryList } from './TrajectoryList.tsx'
 import { TrajectoryTimeline } from './TrajectoryTimeline.tsx'
@@ -142,6 +143,8 @@ export function App() {
   return (
     <div className="app">
       <h1>Trajectory Planner (Prototype 04)</h1>
+
+      <ImportSummaryPanel summary={importSummary} droppedForCurrency={droppedForCurrency} />
 
       <TrajectoryList
         master={state.master}
