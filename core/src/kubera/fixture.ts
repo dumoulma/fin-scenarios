@@ -1,0 +1,313 @@
+import type { KuberaSnapshot } from './types.ts'
+
+// Entirely synthetic — no real account data. Shaped after a real Kubera export
+// inspected while building prototypes/01-kubera-import: multi-currency cash, a
+// brokerage/Roth IRA whose ETF holdings appear as separate "child" line items with a
+// `parent` pointer back to the account, a whole life policy Kubera files under
+// "Retirement Investments" with no dedicated category, a Canadian TFSA with no
+// equivalent Holding Context, and a stale $0 duplicate mortgage entry sitting next to
+// the real one. The HSA and Roth 401(k) items (a18/a19) are added purely to exercise
+// domain-required Holding Contexts the real captured export didn't happen to contain.
+export const fixtureSnapshot: KuberaSnapshot = {
+  asOfDate: '2026-08-01',
+  baseCurrency: 'USD',
+  items: [
+    // --- Cash ---
+    {
+      id: 'a1',
+      name: 'Ridgeline Bank - Everyday Checking - 4410',
+      sectionName: 'US Bank Accounts',
+      sheetName: 'Cash',
+      category: 'asset',
+      country: 'US',
+      subType: 'cash',
+      value: { amount: 8450.12, currency: 'USD' },
+    },
+    {
+      id: 'a2',
+      name: 'Meridian Savings - High Yield Savings - 2207',
+      sectionName: 'US Bank Accounts',
+      sheetName: 'Cash',
+      category: 'asset',
+      country: 'US',
+      subType: 'cash',
+      value: { amount: 42310.77, currency: 'USD' },
+    },
+    {
+      id: 'a3',
+      name: 'BrightPath Federal - Everyday Checking - 5567',
+      sectionName: 'US Bank Accounts',
+      sheetName: 'Cash',
+      category: 'asset',
+      country: 'US',
+      subType: 'cash',
+      value: { amount: 320.0 }, // currency omitted by the source — falls back to baseCurrency
+    },
+    {
+      id: 'a4',
+      name: 'Northshore Credit Union - Everyday Account - 9931',
+      sectionName: 'Canada Bank Accounts',
+      sheetName: 'Cash',
+      category: 'asset',
+      country: 'CA',
+      subType: 'cash',
+      value: { amount: 1875.4, currency: 'CAD' },
+    },
+    {
+      id: 'a5',
+      name: 'Sakura Trust - Yen Account',
+      sectionName: 'Japan Bank Accounts',
+      sheetName: 'Cash',
+      category: 'asset',
+      country: 'JP',
+      subType: 'other', // manual foreign entry Kubera couldn't classify as cash
+      assetClass: 'miscellaneous',
+      value: { amount: 150000, currency: 'JPY' },
+    },
+    {
+      id: 'a6',
+      name: 'Northshore Credit Union - Qualifying Member Share - 9931',
+      sectionName: 'Canada Bank Accounts',
+      sheetName: 'Cash',
+      category: 'asset',
+      country: 'CA',
+      subType: 'investment', // a $5 credit-union membership share, not a cash balance
+      value: { amount: 5, currency: 'CAD' },
+    },
+
+    // --- Taxable brokerage (account-level item + its individual holdings) ---
+    {
+      id: 'a7',
+      name: 'Fairview Brokerage - Individual Taxable ...118',
+      sectionName: 'Fairview Brokerage - Individual Taxable ...118',
+      sheetName: 'Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      assetClass: 'investment',
+      value: { amount: 214870.33, currency: 'USD' },
+    },
+    {
+      id: 'a7-h1',
+      name: 'Global Equity Index Fund',
+      sectionName: 'Fairview Brokerage - Individual Taxable ...118',
+      sheetName: 'Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'etf',
+      value: { amount: 90210.11, currency: 'USD' },
+      parent: { id: 'a7', name: 'Fairview Brokerage - Individual Taxable ...118' },
+    },
+    {
+      id: 'a7-h2',
+      name: 'Total Market ETF',
+      sectionName: 'Fairview Brokerage - Individual Taxable ...118',
+      sheetName: 'Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'etf',
+      value: { amount: 80000.0, currency: 'USD' },
+      parent: { id: 'a7', name: 'Fairview Brokerage - Individual Taxable ...118' },
+    },
+    {
+      id: 'a7-h3',
+      name: 'CASH',
+      sectionName: 'Fairview Brokerage - Individual Taxable ...118',
+      sheetName: 'Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'cash',
+      value: { amount: 44660.22, currency: 'USD' },
+      parent: { id: 'a7', name: 'Fairview Brokerage - Individual Taxable ...118' },
+    },
+
+    // --- Investments-sheet items with no clean fit ---
+    {
+      id: 'a8',
+      name: 'Nimbus Robotics - Stock Option Grant - 2021 Plan',
+      sectionName: 'Incentive Stock Options',
+      sheetName: 'Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'stock_option',
+      assetClass: 'private equity',
+      value: { amount: 12000, currency: 'USD' },
+    },
+    {
+      id: 'a9',
+      name: 'Northshore - GIC 3yr term',
+      sectionName: 'Canada Assets',
+      sheetName: 'Investments',
+      category: 'asset',
+      country: 'CA',
+      subType: 'other',
+      assetClass: 'miscellaneous',
+      value: { amount: 9000, currency: 'CAD' },
+    },
+    {
+      id: 'a10',
+      name: 'Northshore - Tax-Free Savings Account - 5521',
+      sectionName: 'Canada Assets',
+      sheetName: 'Investments',
+      category: 'asset',
+      country: 'CA',
+      subType: 'investment',
+      assetClass: 'investment',
+      value: { amount: 15230, currency: 'CAD' },
+    },
+
+    // --- Retirement Investments ---
+    {
+      id: 'a11',
+      name: 'Horizon Payroll / Meridian 401(k) - ...7734',
+      sectionName: 'USA',
+      sheetName: 'Retirement Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      value: { amount: 98765.43, currency: 'USD' },
+    },
+    {
+      id: 'a12',
+      name: 'Fairview Brokerage - Traditional IRA ...536',
+      sectionName: 'USA',
+      sheetName: 'Retirement Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      value: { amount: 54210.09, currency: 'USD' },
+    },
+    {
+      id: 'a13',
+      name: 'Fairview Brokerage - Roth IRA ...125',
+      sectionName: 'Fairview Roth IRA',
+      sheetName: 'Retirement Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      value: { amount: 31000.0, currency: 'USD' },
+    },
+    {
+      id: 'a13-h1',
+      name: 'CASH',
+      sectionName: 'Fairview Roth IRA',
+      sheetName: 'Retirement Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'cash',
+      value: { amount: 500, currency: 'USD' },
+      parent: { id: 'a13', name: 'Fairview Brokerage - Roth IRA ...125' },
+    },
+    {
+      id: 'a14',
+      name: 'Alderbrook Industries - Profit-Sharing Retirement Plan',
+      sectionName: 'USA',
+      sheetName: 'Retirement Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      value: { amount: 40210, currency: 'USD' },
+    },
+    {
+      id: 'a15',
+      name: 'Old Employer 401(k) - Rollover Pending',
+      sectionName: 'USA',
+      sheetName: 'Retirement Investments',
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      value: null, // sync never completed
+    },
+    {
+      id: 'a16',
+      name: 'Meridian Life - Whole Life 95 (Cash Value)',
+      sectionName: 'USA',
+      sheetName: 'Retirement Investments', // Kubera has no dedicated whole-life category
+      category: 'asset',
+      country: 'US',
+      subType: 'other',
+      assetClass: 'bond',
+      value: { amount: 26840.0, currency: 'USD' },
+    },
+    {
+      id: 'a18',
+      name: 'Meridian HSA - Investment Sleeve',
+      sectionName: 'USA',
+      sheetName: 'Retirement Investments', // synthetic — filed by analogy to Whole Life above
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      value: { amount: 4200, currency: 'USD' },
+    },
+    {
+      id: 'a19',
+      name: 'Horizon Payroll - Roth 401(k) - ...2214',
+      sectionName: 'USA',
+      sheetName: 'Retirement Investments', // synthetic
+      category: 'asset',
+      country: 'US',
+      subType: 'investment',
+      value: { amount: 22000, currency: 'USD' },
+    },
+
+    // --- Real estate ---
+    {
+      id: 'a17',
+      name: '412 Willowmere Ct #4B',
+      sectionName: 'Section 1',
+      sheetName: 'Real Estate',
+      category: 'asset',
+      country: 'US',
+      subType: 'primary residence',
+      value: { amount: 685000, currency: 'USD' },
+    },
+
+    // --- Debts ---
+    {
+      id: 'd1',
+      name: 'Ridgeline Bank - Signature Visa - 3312',
+      sectionName: 'Credit Cards',
+      sheetName: 'Credit Card',
+      category: 'debt',
+      country: 'US',
+      value: { amount: 1240.55, currency: 'USD' },
+    },
+    {
+      id: 'd2',
+      name: 'Northshore - Classic Visa - 7788',
+      sectionName: 'Credit Cards',
+      sheetName: 'Credit Card',
+      category: 'debt',
+      country: 'CA',
+      value: { amount: 0, currency: 'CAD' },
+    },
+    {
+      id: 'd3',
+      name: 'Summit Home Lending - Mortgage 412 Willowmere C4B',
+      sectionName: 'Section 1',
+      sheetName: 'Loans',
+      category: 'debt',
+      country: 'US',
+      value: { amount: 0, currency: 'USD' }, // stale duplicate — see "Mortgage" below
+    },
+    {
+      id: 'd4',
+      name: 'Mortgage',
+      sectionName: 'Section 1',
+      sheetName: 'Loans',
+      category: 'debt',
+      country: 'US',
+      value: { amount: 412650.88, currency: 'USD' },
+    },
+    {
+      id: 'd5',
+      name: 'Meridian Life',
+      sectionName: 'Section 1',
+      sheetName: 'Other', // a $0 policy-loan placeholder from the insurer, not a real debt
+      category: 'debt',
+      country: 'US',
+      subType: 'other',
+      value: { amount: 0, currency: 'USD' },
+    },
+  ],
+}
