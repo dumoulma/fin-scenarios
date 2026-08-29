@@ -13,7 +13,7 @@ describe('01. Empty trajectory preserves state', () => {
   it('leaves $100,000 cash unchanged after one month with no spending, events, or policies', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -28,11 +28,27 @@ describe('01. Empty trajectory preserves state', () => {
   })
 })
 
+describe('Spending is a Scenario Parameter', () => {
+  it('reduces Financial State even when no Policy is present', () => {
+    const initialState: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD',
+      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 1_000 }],
+      liabilities: [],
+    }
+    const trajectory = createTrajectory('Spending without disposition rules', [
+      createScenario({ name: 'One month', start: '2026-01', end: '2026-01', events: [], parameters: { spending: 250, taxRate: 0 }, policies: [] }),
+    ])
+
+    expect(calculate(initialState, trajectory).monthly[0]!.assets[0]!.value).toBe(750)
+  })
+})
+
 describe('02. One equity asset grows', () => {
   it('compounds $100,000 equity at a fixed 12% annual return, monthly, over one year', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -52,7 +68,7 @@ describe('03. Cash earns interest', () => {
   it('compounds $100,000 cash at a fixed 4% annual rate, monthly, over one year', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -70,9 +86,9 @@ describe('04. Equity distribution creates cash inflow', () => {
   it('generates $4,000 of cash over the year from a 4% distribution, leaving the $100,000 principal untouched (0% growth), landing in Cash not Equity', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 },
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -99,9 +115,9 @@ describe('05. Positive cash flow is invested', () => {
   it('transfers the $2,000/month surplus into Equity; Cash does not accumulate it', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -116,7 +132,6 @@ describe('05. Positive cash flow is invested', () => {
         events: [{ id: 'evt-income', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 120_000 } }],
         parameters: { spending: 8_000, taxRate: 0, cashApy: 0, equityReturn: 0 },
         policies: [
-          { id: 'pol-spend', kind: 'spending', priority: 1 },
           { id: 'pol-invest', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -134,9 +149,9 @@ describe('06. Positive cash flow accumulates in cash', () => {
   it('the same setup as 05, but with no invest policy, leaves the $2,000 surplus in Cash', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -147,7 +162,7 @@ describe('06. Positive cash flow accumulates in cash', () => {
         end: '2026-01',
         events: [{ id: 'evt-income', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 120_000 } }],
         parameters: { spending: 8_000, taxRate: 0, cashApy: 0, equityReturn: 0 },
-        policies: [{ id: 'pol-spend', kind: 'spending', priority: 1 }],
+        policies: [],
       }),
     ])
 
@@ -163,7 +178,7 @@ describe('07. Negative cash flow is funded by selling an asset', () => {
   it('converts $3,000/month of Equity to Cash to cover the deficit, remaining solvent', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -174,7 +189,6 @@ describe('07. Negative cash flow is funded by selling an asset', () => {
         events: [{ id: 'evt-income', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 60_000 } }], // $5,000/mo
         parameters: { spending: 8_000, taxRate: 0, equityReturn: 0 },
         policies: [
-          { id: 'pol-spend', kind: 'spending', priority: 1 },
           { id: 'pol-sell', kind: 'fundDeficitFromEquitySale', priority: 2 },
         ],
       }),
@@ -192,7 +206,7 @@ describe('08. Negative cash flow increases debt', () => {
   it('draws Cash down to $0, then borrows for subsequent deficits', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 10_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 10_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -203,7 +217,6 @@ describe('08. Negative cash flow increases debt', () => {
         events: [],
         parameters: { spending: 5_000, taxRate: 0, cashApy: 0 },
         policies: [
-          { id: 'pol-spend', kind: 'spending', priority: 1 },
           { id: 'pol-cash', kind: 'fundDeficitFromCash', priority: 2 },
           { id: 'pol-debt', kind: 'fundDeficitFromDebt', priority: 3 },
         ],
@@ -226,7 +239,7 @@ describe('09. One-time income Event', () => {
   it('increases Financial State by exactly $50,000 at the inheritance tick, and holds afterward', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -252,7 +265,7 @@ describe('10. One-time spending embedded in a Scenario', () => {
   it('leaves the $5,000/month Scenario spending unchanged and applies the extra $20,000 only in its own month', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -262,7 +275,7 @@ describe('10. One-time spending embedded in a Scenario', () => {
         end: '2026-12',
         events: [{ id: 'evt-travel', at: '2026-06', effect: { kind: 'oneTimeCashFlow', amount: -20_000 } }],
         parameters: { spending: 5_000, taxRate: 0, cashApy: 0 },
-        policies: [{ id: 'pol-spend', kind: 'spending', priority: 1 }],
+        policies: [],
       }),
     ])
 

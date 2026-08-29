@@ -40,7 +40,7 @@ function isAggregated(assetType: AssetType): boolean {
   return assetType !== 'realEstate' && assetType !== 'wholeLifeInsurance'
 }
 
-type RecognizedAsset = { item: KuberaItem; assetType: AssetType; holdingContext: HoldingContext; amount: number }
+type RecognizedAsset = { item: KuberaItem; assetType: AssetType; holdingContext: HoldingContext; amount: number; country: string; currency: string }
 type RecognizedLiability = { item: KuberaItem; amount: number }
 
 /**
@@ -81,9 +81,13 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
       unsupportedCurrency.push({ source: item.name, currency: resolved.currency })
       continue
     }
+    if (!item.country) {
+      needsManualInput.push({ source: item.name, reason: 'missing country' })
+      continue
+    }
 
     if (classification.outcome === 'recognizedAsset') {
-      recognizedAssets.push({ item, assetType: classification.assetType, holdingContext: classification.holdingContext, amount: resolved.amount })
+      recognizedAssets.push({ item, assetType: classification.assetType, holdingContext: classification.holdingContext, amount: resolved.amount, country: item.country, currency: resolved.currency })
     } else {
       recognizedLiabilities.push({ item, amount: resolved.amount })
     }
@@ -93,15 +97,15 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
   const aggregated: ImportSummary['aggregated'] = []
   const groups = new Map<string, RecognizedAsset[]>()
   for (const r of recognizedAssets) {
-    const groupKey = isAggregated(r.assetType) ? slug(r.assetType, r.holdingContext) : slug(r.assetType, r.holdingContext, r.item.id)
+    const groupKey = isAggregated(r.assetType) ? slug(r.assetType, r.holdingContext, r.country) : slug(r.assetType, r.holdingContext, r.country, r.item.id)
     groups.set(groupKey, [...(groups.get(groupKey) ?? []), r])
   }
 
   for (const [id, group] of groups) {
-    const { assetType, holdingContext } = group[0]!
+    const { assetType, holdingContext, country, currency } = group[0]!
     const value = group.reduce((sum, r) => sum + r.amount, 0)
     const name = group.length === 1 ? group[0]!.item.name : `${assetType} (${holdingContext}) — ${group.length} accounts`
-    assets.push({ id, name, assetType, holdingContext, value })
+    assets.push({ id, name, assetType, holdingContext, country, currency, value })
 
     if (group.length > 1) aggregated.push({ intoAssetId: id, sources: group.map((r) => r.item.name) })
     for (const r of group) recognizedSummary.push({ source: r.item.name, mappedTo: id })
@@ -114,7 +118,7 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
   })
 
   return {
-    initialState: { asOf: snapshot.asOfDate.slice(0, 7), assets, liabilities },
+    initialState: { asOf: snapshot.asOfDate.slice(0, 7), reportingCurrency, assets, liabilities },
     summary: { recognized: recognizedSummary, aggregated, ignored, needsManualInput, unsupportedCurrency },
   }
 }

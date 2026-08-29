@@ -13,6 +13,8 @@ export type KuberaItem = {
   sheetName: string
   category: KuberaItemCategory
   value: KuberaMoney
+  /** Country supplied by Kubera for this holding; absent values need manual input. */
+  country?: string
   subType?: string
   assetClass?: string
   /**

@@ -14,11 +14,11 @@ function snapshotOf(items: KuberaSnapshot['items']): KuberaSnapshot {
 describe('1. a simple Kubera asset becomes one Asset Position', () => {
   it('imports a single cash item as one Asset with the right Asset Type and value', () => {
     const snapshot = snapshotOf([
-      { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', subType: 'cash', value: { amount: 1200, currency: 'USD' } },
+      { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', country: 'US', subType: 'cash', value: { amount: 1200, currency: 'USD' } },
     ])
     const { initialState } = importKuberaSnapshot(snapshot)
     expect(initialState.assets).toHaveLength(1)
-    expect(initialState.assets[0]).toMatchObject({ assetType: 'cash', holdingContext: 'none', value: 1200 })
+    expect(initialState.assets[0]).toMatchObject({ assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 1200 })
   })
 })
 
@@ -122,6 +122,14 @@ describe('11. ambiguous classifications are surfaced rather than silently guesse
     const { summary } = importKuberaSnapshot(fixtureSnapshot)
     expect(summary.unsupportedCurrency.some((u) => u.source.includes('Northshore Credit Union - Everyday') && u.currency === 'CAD')).toBe(true)
   })
+
+  it('a recognized holding with no country is surfaced for manual input rather than assigned one', () => {
+    const { initialState, summary } = importKuberaSnapshot(snapshotOf([
+      { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', subType: 'cash', value: { amount: 1200, currency: 'USD' } },
+    ]))
+    expect(initialState.assets).toHaveLength(0)
+    expect(summary.needsManualInput).toContainEqual({ source: 'Checking', reason: 'missing country' })
+  })
 })
 
 describe('12. imported totals reconcile to the intended Kubera portfolio totals within the mapping rules', () => {
@@ -147,7 +155,7 @@ describe('13. imported Initial State can initialize a Trajectory', () => {
       end: addMonths(initialState.asOf, 11),
       events: [],
       parameters: { spending: 5000, taxRate: 0.2 },
-      policies: [{ id: 'p1', kind: 'spending', priority: 1 }],
+      policies: [],
     })
     const trajectory = createTrajectory('From Kubera', [scenario])
     expect(trajectory.scenarios[0]!.start).toBe(initialState.asOf)
@@ -163,7 +171,7 @@ describe('14. a simple Scenario can be calculated from the imported Initial Stat
       end: addMonths(initialState.asOf, 11),
       events: [],
       parameters: { spending: 5000, taxRate: 0.2, equityReturn: 0.07, cashApy: 0.02 },
-      policies: [{ id: 'p1', kind: 'spending', priority: 1 }, { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
+      policies: [ { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
     })
     const trajectory = createTrajectory('From Kubera', [scenario])
     const result = calculate(initialState, trajectory)

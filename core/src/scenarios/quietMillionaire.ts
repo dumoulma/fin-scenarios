@@ -8,10 +8,10 @@ import type { FinancialState, Policy, Scenario } from '../domain/types.ts'
 
 export const initialState: FinancialState = {
   asOf: '2026-01',
-  assets: [
-    { id: 'cash', name: 'Checking', assetType: 'cash', holdingContext: 'none', value: 0 },
-    { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', value: 0 },
-    { id: 'brokerage', name: 'Taxable Brokerage', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0 },
+  reportingCurrency: 'USD', assets: [
+    { id: 'cash', name: 'Checking', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+    { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 0 },
+    { id: 'brokerage', name: 'Taxable Brokerage', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
   ],
   liabilities: [],
 }
@@ -25,7 +25,6 @@ const MATCH_RATE = 0.5
 const MATCH_LIMIT_PERCENT_OF_SALARY = 0.06
 
 const standardPolicies: Policy[] = [
-  { id: 'pol-spend', kind: 'spending', priority: 1 },
   { id: 'pol-reserve', kind: 'maintainCashReserve', priority: 2 },
   { id: 'pol-401k-match', kind: 'contributeUpToMatch', priority: 3, targetHoldingContext: 'traditionalRetirement' },
   { id: 'pol-brokerage', kind: 'investSurplus', priority: 4, targetHoldingContext: 'taxableBrokerage' },

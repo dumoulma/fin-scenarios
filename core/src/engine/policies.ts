@@ -14,8 +14,6 @@ export type PolicyHandler = (pool: number, state: FinancialState, getParam: GetP
  * without changing this function.
  */
 const policyHandlers: Record<PolicyKind, PolicyHandler> = {
-  spending: (pool, state, _getParam, ctx) => ({ pool: pool - ctx.spendingAmount, state }),
-
   maintainCashReserve: (pool, state, getParam, ctx) => {
     if (pool <= 0) return { pool, state }
     const cash = state.assets.find((a) => a.assetType === 'cash')

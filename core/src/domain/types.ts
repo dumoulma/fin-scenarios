@@ -12,6 +12,10 @@ export type Asset = {
   name: string
   assetType: AssetType
   holdingContext: HoldingContext
+  /** ISO 3166-1 alpha-2 country code for the asset's jurisdiction. */
+  country: string
+  /** ISO 4217 currency code in which `value` is denominated. */
+  currency: string
   value: number
   /** Only meaningful when assetType is 'wholeLifeInsurance' — a policy loan reduces
    * the death benefit/available cash value without reducing `value` itself. */
@@ -45,6 +49,8 @@ export type Liability = {
 
 export type FinancialState = {
   asOf: YearMonth
+  /** Currency used for values that the engine can combine in this Financial State. */
+  reportingCurrency: string
   assets: Asset[]
   liabilities: Liability[]
 }
@@ -53,6 +59,17 @@ export type FinancialState = {
  * domain doc treats it as a conceptually distinct thing (the starting point for
  * calculation, not a mid-calculation snapshot). */
 export type InitialState = FinancialState
+
+export class CurrencyInvariantError extends Error {}
+
+export function assertFinancialStateCurrency(state: FinancialState): void {
+  const nonReportingAsset = state.assets.find((asset) => asset.currency !== state.reportingCurrency)
+  if (nonReportingAsset) {
+    throw new CurrencyInvariantError(
+      `Asset "${nonReportingAsset.name}" is denominated in ${nonReportingAsset.currency}, but this Financial State reports in ${state.reportingCurrency}; an FX conversion is required before calculation`,
+    )
+  }
+}
 
 // --- Events & Event Types ---
 // An Event is one timestamp + an effect. Recurrence/duration is *behavior a specific
@@ -83,7 +100,6 @@ export type ScenarioParameters = {
 }
 
 export type PolicyKind =
-  | 'spending'
   | 'maintainCashReserve'
   | 'contributeUpToMatch'
   | 'contributeUpToLimit'
@@ -145,6 +161,7 @@ export type CalculationResult = {
 }
 
 export function netWorth(state: FinancialState): number {
+  assertFinancialStateCurrency(state)
   // A Whole Life policy loan reduces the death benefit/surrender value without
   // reducing `value` itself (docs/domain/CONTEXT.md's cash-value/loan-balance
   // asymmetry) — it's still a real claim against the policy and must count here.

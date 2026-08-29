@@ -64,16 +64,13 @@ duplicate), and null-value rows (an incomplete sync).
 
 ## Domain-model finding: currency
 
-The real account is multi-currency (USD/CAD/JPY). The domain's `FinancialState` has
-no currency field at all — it's single-currency by design. Rather than expand the
-domain to carry currency (a real architecture change, not something this prototype
-should decide unilaterally) or fabricate an FX rate, the importer takes an explicit
-`reportingCurrency` (default: the snapshot's own base currency) and surfaces any item
-in a different currency as `unsupportedCurrency` — visible in the import summary,
-excluded from the Initial State, never silently converted or dropped without a trace.
-This matches the precedent already set in `prototypes/04-ui-sample-data`'s Kubera
-adapter. No domain change was made; this is a documented finding for whoever
-eventually decides whether the domain needs multi-currency support.
+The real account is multi-currency (USD/CAD/JPY). The domain now records the
+Financial State's `reportingCurrency` and every Asset's country and currency. The
+engine has no FX behavior: it rejects a state containing an Asset whose currency does
+not match the reporting currency. The importer therefore still surfaces any other
+currency as `unsupportedCurrency`, excludes it from the Initial State, and never
+fabricates a rate. It also asks for manual input when Kubera has not supplied a
+country rather than inventing one.
 
 ## Everything else
 

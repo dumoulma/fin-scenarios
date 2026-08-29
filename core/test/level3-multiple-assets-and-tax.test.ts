@@ -2,19 +2,33 @@
 import { describe, expect, it } from 'vitest'
 import { createScenario, createTrajectory } from '../src/domain/trajectory.ts'
 import { netWorth, type FinancialState, type Scenario } from '../src/domain/types.ts'
-import { calculate } from '../src/engine/calculate.ts'
+import { calculate, CurrencyInvariantError } from '../src/engine/calculate.ts'
 
 function scenario(overrides: Partial<Scenario> & { name: string; start: string; end: string }): Scenario {
   return createScenario({ events: [], parameters: { spending: 0, taxRate: 0 }, policies: [], ...overrides })
 }
 
+describe('Currency invariant', () => {
+  it('rejects a non-reporting-currency position until an FX conversion is explicitly supplied', () => {
+    const initialState: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD',
+      assets: [{ id: 'cash', name: 'Canadian cash', assetType: 'cash', holdingContext: 'none', country: 'CA', currency: 'CAD', value: 100_000 }],
+      liabilities: [],
+    }
+    const trajectory = createTrajectory('No implicit FX', [scenario({ name: 'One month', start: '2026-01', end: '2026-01' })])
+
+    expect(() => calculate(initialState, trajectory)).toThrow(CurrencyInvariantError)
+  })
+})
+
 describe('19. Equity and Fixed Income grow independently', () => {
   it('each Asset Type applies its own behavior and the combined state reflects both', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'eq', name: 'US Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 },
-        { id: 'bond', name: 'Bonds', assetType: 'fixedIncome', holdingContext: 'none', value: 100_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'eq', name: 'US Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'bond', name: 'Bonds', assetType: 'fixedIncome', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
       ],
       liabilities: [],
     }
@@ -32,10 +46,10 @@ describe('20. Two Equity positions with different behavior', () => {
   it('positions evolve independently and produce different cash inflows despite sharing the Equity Asset Type', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'sp500', name: 'S&P 500', assetType: 'equity', holdingContext: 'none', value: 100_000, growthRate: 0.08, distributionRate: 0.015 },
-        { id: 'div', name: 'High-dividend', assetType: 'equity', holdingContext: 'none', value: 100_000, growthRate: 0.05, distributionRate: 0.04 },
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'sp500', name: 'S&P 500', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000, growthRate: 0.08, distributionRate: 0.015 },
+        { id: 'div', name: 'High-dividend', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000, growthRate: 0.05, distributionRate: 0.04 },
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -68,10 +82,10 @@ describe('21. Tax wrappers do not change growth behavior', () => {
   it('identical Equity positions grow identically regardless of holdingContext', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'taxable', name: 'Taxable', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 100_000 },
-        { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', value: 100_000 },
-        { id: 'roth', name: 'Roth', assetType: 'equity', holdingContext: 'rothRetirement', value: 100_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'taxable', name: 'Taxable', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 100_000 },
+        { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'roth', name: 'Roth', assetType: 'equity', holdingContext: 'rothRetirement', country: 'US', currency: 'USD', value: 100_000 },
       ],
       liabilities: [],
     }
@@ -90,9 +104,9 @@ describe('22. Taxable distribution', () => {
   it('a 20% tax removes $800 of the $4,000 gross distribution, leaving $3,200 available', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'eq', name: 'Taxable Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 100_000, growthRate: 0, distributionRate: 0.04 },
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'eq', name: 'Taxable Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 100_000, growthRate: 0, distributionRate: 0.04 },
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -109,9 +123,9 @@ describe('23. Roth distribution is not taxed', () => {
   it('the same distribution held in a Roth container is untaxed — full $4,000 available', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'eq', name: 'Roth Equity', assetType: 'equity', holdingContext: 'rothRetirement', value: 100_000, growthRate: 0, distributionRate: 0.04 },
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'eq', name: 'Roth Equity', assetType: 'equity', holdingContext: 'rothRetirement', country: 'US', currency: 'USD', value: 100_000, growthRate: 0, distributionRate: 0.04 },
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -128,7 +142,7 @@ describe('24. Tax on employment income', () => {
   it('$10,000/mo gross taxed at 30% leaves $7,000/mo after tax, $2,000/mo surplus after $5,000 spending', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -138,7 +152,7 @@ describe('24. Tax on employment income', () => {
         end: '2026-01',
         events: [{ id: 'evt', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 120_000 } }],
         parameters: { spending: 5_000, taxRate: 0.3 },
-        policies: [{ id: 'p', kind: 'spending', priority: 1 }],
+        policies: [],
       }),
     ])
 
@@ -153,9 +167,9 @@ describe('25. Mixed income sources are summed', () => {
   it('combines salary, interest, dividends, and a one-time gift correctly, taxing only salary and dividends', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }, // -> $500/mo interest @ 6% APY
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000, growthRate: 0, distributionRate: 0.036 }, // -> $300/mo dividend
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }, // -> $500/mo interest @ 6% APY
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000, growthRate: 0, distributionRate: 0.036 }, // -> $300/mo dividend
       ],
       liabilities: [],
     }
@@ -169,7 +183,7 @@ describe('25. Mixed income sources are summed', () => {
           { id: 'evt-gift', at: '2026-01', effect: { kind: 'oneTimeCashFlow', amount: 20_000 } },
         ],
         parameters: { spending: 5_000, taxRate: 0.25, cashApy: 0.06 },
-        policies: [{ id: 'p', kind: 'spending', priority: 1 }],
+        policies: [],
       }),
     ])
 
@@ -196,7 +210,7 @@ describe('25. Mixed income sources are summed', () => {
   it('the gift does not recur into a second month', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [

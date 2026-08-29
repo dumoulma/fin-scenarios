@@ -14,7 +14,7 @@ function getParam(values: Record<string, number>): GetParam {
 function stateWith401k(value = 0): FinancialState {
   return {
     asOf: '2026-01',
-    assets: [{ id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', value }],
+    reportingCurrency: 'USD', assets: [{ id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value }],
     liabilities: [],
   }
 }
@@ -44,7 +44,7 @@ describe('contributeUpToMatch', () => {
     const ctx = { spendingAmount: 0, grossIncome: 10_000, matchRate: 0.5, matchLimitPercentOfSalary: 0.06 }
     const noTarget: Policy = { id: 'p', kind: 'contributeUpToMatch', priority: 1 }
     expect(reconcile(2_000, stateWith401k(), [noTarget], getParam({}), ctx).pool).toBe(2_000)
-    expect(reconcile(2_000, { asOf: '2026-01', assets: [], liabilities: [] }, [policy], getParam({}), ctx).pool).toBe(2_000)
+    expect(reconcile(2_000, { asOf: '2026-01', reportingCurrency: 'USD', assets: [], liabilities: [] }, [policy], getParam({}), ctx).pool).toBe(2_000)
     expect(reconcile(-500, stateWith401k(), [policy], getParam({}), ctx).pool).toBe(-500)
   })
 })
@@ -67,7 +67,7 @@ describe('contributeUpToLimit', () => {
 
   it('a different targetHoldingContext looks up its own limit — an IRA and a 401(k) are the same policy kind, different bucket', () => {
     const iraPolicy: Policy = { id: 'p', kind: 'contributeUpToLimit', priority: 1, targetHoldingContext: 'rothRetirement' }
-    const state: FinancialState = { asOf: '2026-01', assets: [{ id: 'ira', name: 'Roth IRA', assetType: 'equity', holdingContext: 'rothRetirement', value: 0 }], liabilities: [] }
+    const state: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [{ id: 'ira', name: 'Roth IRA', assetType: 'equity', holdingContext: 'rothRetirement', country: 'US', currency: 'USD', value: 0 }], liabilities: [] }
     const { state: after } = reconcile(1_000, state, [iraPolicy], getParam({ rothRetirementAnnualLimit: 7_000, traditionalRetirementAnnualLimit: 24_000 }), ctx)
     expect(after.assets[0]!.value).toBeCloseTo(7_000 / 12, 6) // used the Roth limit, not the Traditional one
   })

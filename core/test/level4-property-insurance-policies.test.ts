@@ -12,9 +12,9 @@ describe('26. Property in Financial State', () => {
   it('property appreciates per its Asset Type behavior while the mortgage amortizes per its own Liability behavior', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 200_000 },
-        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', value: 600_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 200_000 },
+        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 600_000 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 150_000, interestRate: 0.06, monthlyPayment: 2_000, linkedAssetId: 'home' }],
     }
@@ -25,7 +25,6 @@ describe('26. Property in Financial State', () => {
         end: '2026-12',
         parameters: { spending: 8_000, taxRate: 0, propertyAppreciation: 0.03 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
         ],
       }),
@@ -45,7 +44,7 @@ describe('27. Property purchase Event', () => {
   it('creates the property and mortgage and reduces Cash by the down payment plus transaction cost', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 700_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 700_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -59,7 +58,7 @@ describe('27. Property purchase Event', () => {
             at: '2026-01',
             effect: {
               kind: 'buyProperty',
-              asset: { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', value: 600_000 },
+              asset: { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 600_000 },
               downPayment: 150_000,
               transactionCost: 12_000,
               mortgage: { id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 450_000, interestRate: 0.06, monthlyPayment: 2_700, linkedAssetId: 'home' },
@@ -85,9 +84,9 @@ describe('28. Property sale Event', () => {
   it('removes the property, settles the mortgage, and adds net proceeds to Cash', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
-        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', value: 600_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 600_000 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 200_000, linkedAssetId: 'home' }],
     }
@@ -114,9 +113,9 @@ describe('29. Move between housing circumstances', () => {
   it("Scenario A ends with the sale transformation; Scenario B starts from that resulting state with its own spending", () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
-        { id: 'condo', name: 'Condo', assetType: 'realEstate', holdingContext: 'none', value: 500_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'condo', name: 'Condo', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 500_000 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 180_000, linkedAssetId: 'condo' }],
     }
@@ -128,7 +127,6 @@ describe('29. Move between housing circumstances', () => {
         events: [{ id: 'evt-sell', at: '2026-06', effect: { kind: 'sellProperty', assetId: 'condo' } }],
         parameters: { spending: 4_000, taxRate: 0 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
         ],
       }),
@@ -138,7 +136,6 @@ describe('29. Move between housing circumstances', () => {
         end: '2026-12',
         parameters: { spending: 5_500, taxRate: 0 }, // rent + living costs differ from ownership costs
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
         ],
       }),
@@ -160,9 +157,9 @@ describe('30. Whole Life cash value grows', () => {
   it('grows independently from Equity and Fixed Income, via its own crediting rate and dividend', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', value: 100_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
       ],
       liabilities: [],
     }
@@ -189,9 +186,9 @@ describe('31. Whole Life policy loan funds a deficit', () => {
   it('increases the policy loan balance and makes cash available, leaving Equity untouched', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', value: 100_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 200_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 200_000 },
       ],
       liabilities: [],
     }
@@ -202,7 +199,6 @@ describe('31. Whole Life policy loan funds a deficit', () => {
         end: '2026-01',
         parameters: { spending: 8_000, taxRate: 0, wholeLifeCreditingRate: 0, wholeLifeDividendRate: 0, wholeLifePolicyFee: 0, equityReturn: 0 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromWholeLifeLoan', priority: 2 },
           { id: 'p3', kind: 'fundDeficitFromEquitySale', priority: 3 },
         ],
@@ -223,10 +219,10 @@ describe('32. Policy priority determines funding source', () => {
   it('drains Cash, then the Whole Life loan capacity, before ever touching Equity', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 50_000 },
-        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', value: 30_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 200_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 50_000 },
+        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 30_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 200_000 },
       ],
       liabilities: [],
     }
@@ -237,7 +233,6 @@ describe('32. Policy priority determines funding source', () => {
         end: '2026-09',
         parameters: { spending: 10_000, taxRate: 0, cashApy: 0, wholeLifeCreditingRate: 0, wholeLifeDividendRate: 0, wholeLifePolicyFee: 0, equityReturn: 0 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
           { id: 'p3', kind: 'fundDeficitFromWholeLifeLoan', priority: 3 },
           { id: 'p4', kind: 'fundDeficitFromEquitySale', priority: 4 },
@@ -268,9 +263,9 @@ describe('33. Policy priority determines surplus destination', () => {
   it('pays down debt first, invests the remainder, and only retains cash once both are satisfied', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 8_000 }],
     }
@@ -307,10 +302,10 @@ describe('34. Different Policy in retirement', () => {
   it('transitions from accumulation to drawdown through a Scenario change alone — no special retirement logic', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 5_000 },
-        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', value: 10_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 50_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 5_000 },
+        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 10_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 50_000 },
       ],
       liabilities: [],
     }
@@ -323,7 +318,6 @@ describe('34. Different Policy in retirement', () => {
         events: [{ id: 'evt', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 96_000 } }], // $8,000/mo
         parameters: { spending: 3_000, ...commonParams }, // $5,000/mo surplus, invested
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -333,7 +327,6 @@ describe('34. Different Policy in retirement', () => {
         end: '2026-04',
         parameters: { spending: 8_000, ...commonParams }, // no income now — pure deficit
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
           { id: 'p3', kind: 'fundDeficitFromWholeLifeLoan', priority: 3 },
           { id: 'p4', kind: 'fundDeficitFromEquitySale', priority: 4 },
@@ -365,12 +358,12 @@ describe('35. Scenario-specific inflation affects spending', () => {
   it("each period's spending and inflation come from its own Scenario's parameters", () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 500_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 500_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
-      scenario({ name: 'A', start: '2026-01', end: '2026-06', parameters: { spending: 8_000, taxRate: 0, inflation: 0.02 }, policies: [{ id: 'p', kind: 'spending', priority: 1 }] }),
-      scenario({ name: 'B', start: '2026-07', end: '2026-12', parameters: { spending: 9_500, taxRate: 0, inflation: 0.03 }, policies: [{ id: 'p', kind: 'spending', priority: 1 }] }),
+      scenario({ name: 'A', start: '2026-01', end: '2026-06', parameters: { spending: 8_000, taxRate: 0, inflation: 0.02 }, policies: [] }),
+      scenario({ name: 'B', start: '2026-07', end: '2026-12', parameters: { spending: 9_500, taxRate: 0, inflation: 0.03 }, policies: [] }),
     ])
 
     const result = calculate(initialState, trajectory)

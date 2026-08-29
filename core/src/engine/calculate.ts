@@ -1,10 +1,11 @@
 import { addMonths, compareYearMonth, yearOf, type YearMonth } from '../domain/dates.ts'
-import type { Asset, CalculationResult, FinancialState, Scenario, Trajectory } from '../domain/types.ts'
+import { assertFinancialStateCurrency, CurrencyInvariantError, type Asset, type CalculationResult, type FinancialState, type Scenario, type Trajectory } from '../domain/types.ts'
 import { applyAssetTypeBehavior, applyLiabilityBehavior, type GetParam } from './assetTypeBehaviors.ts'
 import { activeAnnualSalaryAt, activeEmploymentMatchAt, applyPointEvent, isPointEventActiveAt } from './eventTypeBehaviors.ts'
 import { reconcile } from './policies.ts'
 
 export class TrajectoryInvariantError extends Error {}
+export { CurrencyInvariantError }
 
 function validateTrajectory(scenarios: Scenario[]): void {
   if (scenarios.length === 0) {
@@ -75,6 +76,7 @@ export function calculate(
   inputs: { parameterProvider: ParameterProvider } = { parameterProvider: constantParameterProvider },
 ): CalculationResult {
   validateTrajectory(trajectory.scenarios)
+  assertFinancialStateCurrency(initialState)
 
   const monthly: FinancialState[] = []
   let state = initialState
@@ -89,6 +91,7 @@ export function calculate(
     // 2. this tick's point Events (buy/sell property, one-time cash flow, Whole
     // Life loan/withdrawal) apply unconditionally, before behavior/reconciliation
     state = scenario.events.filter((event) => isPointEventActiveAt(event, tick)).reduce((s, event) => applyPointEvent(s, event), state)
+    assertFinancialStateCurrency(state)
 
     // 3. Asset/Liability Type behavior (growth stays internal; a liability's
     // scheduled payment and an asset's distribution are real cash flows)
@@ -122,12 +125,12 @@ export function calculate(
     // taxable cash flow is taxed — a point Event (gift, inheritance) never touches
     // this at all, and a tax-advantaged container's distribution is excluded above.
     const tax = taxableCashFlow * getParam('taxRate')
-    pool -= tax
+    const spending = getParam('spending')
+    pool -= spending + tax
 
-    // 8. Policies reconcile the remaining pool (spending's claim happens here too,
-    // at priority order, alongside cash-reserve/retirement/mortgage/investing)
+    // 8. Policies reconcile the remaining pool in priority order.
     const { pool: remainingPool, state: afterPolicies } = reconcile(pool, state, scenario.policies, getParam, {
-      spendingAmount: scenario.parameters.spending,
+      spendingAmount: spending,
       grossIncome,
       matchRate,
       matchLimitPercentOfSalary,

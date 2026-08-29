@@ -6,9 +6,9 @@ import type { FinancialState, Policy } from '../src/domain/types.ts'
 function baseState(): FinancialState {
   return {
     asOf: '2026-01',
-    assets: [
-      { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 5000 },
-      { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', value: 10000 },
+    reportingCurrency: 'USD', assets: [
+      { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 5000 },
+      { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 10000 },
     ],
     liabilities: [{ id: 'm', name: 'Mortgage', kind: 'mortgage', balance: 300000, linkedAssetId: 'home' }],
   }
@@ -20,11 +20,6 @@ const getParam: GetParam = (name) => (name === 'cashReserveMonths' ? 3 : name ==
 const ctx = { spendingAmount: 3000, grossIncome: 6000, matchRate: 0, matchLimitPercentOfSalary: 0 }
 
 describe('reconcile', () => {
-  it('spending claims first and can drive the pool negative', () => {
-    const { pool } = reconcile(1000, baseState(), [{ id: 'p', kind: 'spending', priority: 1 }], getParam, ctx)
-    expect(pool).toBe(1000 - 3000)
-  })
-
   it('maintainCashReserve tops up to spendingAmount * cashReserveMonths, no further', () => {
     const { pool, state } = reconcile(50000, baseState(), [{ id: 'r', kind: 'maintainCashReserve', priority: 1 }], getParam, ctx)
     const target = ctx.spendingAmount * 3
@@ -58,13 +53,12 @@ describe('reconcile', () => {
     expect(b.state.assets.find((x) => x.holdingContext === 'traditionalRetirement')!.value).toBe(10000)
   })
 
-  it('a non-positive pool makes every subsequent policy a no-op', () => {
+  it('a non-positive pool makes every policy a no-op', () => {
     const policies: Policy[] = [
-      { id: 's', kind: 'spending', priority: 1 },
-      { id: 'r', kind: 'maintainCashReserve', priority: 2 },
-      { id: 'c', kind: 'contributeUpToLimit', priority: 3, targetHoldingContext: 'traditionalRetirement' },
+      { id: 'r', kind: 'maintainCashReserve', priority: 1 },
+      { id: 'c', kind: 'contributeUpToLimit', priority: 2, targetHoldingContext: 'traditionalRetirement' },
     ]
-    const { state } = reconcile(1000, baseState(), policies, getParam, ctx)
+    const { state } = reconcile(-2000, baseState(), policies, getParam, ctx)
     expect(state).toEqual(baseState())
   })
 })

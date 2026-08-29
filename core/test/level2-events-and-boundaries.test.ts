@@ -12,9 +12,9 @@ describe('11. Employment starts and generates monthly income', () => {
   it('generates monthly income while active; surplus is invested', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -26,7 +26,6 @@ describe('11. Employment starts and generates monthly income', () => {
         events: [{ id: 'evt-employment', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 120_000 } }],
         parameters: { spending: 5_000, taxRate: 0, equityReturn: 0 },
         policies: [
-          { id: 'pol-spend', kind: 'spending', priority: 1 },
           { id: 'pol-invest', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -46,7 +45,7 @@ describe('12. Employment ends', () => {
   it('generates salary for months 1-6 and none for months 7-12', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -80,7 +79,7 @@ describe('13. One Scenario becomes two contiguous Scenarios', () => {
   it("June's ending Financial State feeds July's calculation with no gap or duplicated month", () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Two scenarios', [
@@ -90,7 +89,7 @@ describe('13. One Scenario becomes two contiguous Scenarios', () => {
         end: '2026-06',
         events: [{ id: 'evt-employment', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 120_000 } }],
         parameters: { spending: 5_000, taxRate: 0 },
-        policies: [{ id: 'pol-spend', kind: 'spending', priority: 1 }],
+        policies: [],
       }),
       scenario({
         name: 'Unemployed',
@@ -98,7 +97,6 @@ describe('13. One Scenario becomes two contiguous Scenarios', () => {
         end: '2026-12',
         parameters: { spending: 5_000, taxRate: 0 },
         policies: [
-          { id: 'pol-spend', kind: 'spending', priority: 1 },
           { id: 'pol-cash', kind: 'fundDeficitFromCash', priority: 2 },
         ],
       }),
@@ -122,12 +120,12 @@ describe('14. Scenario spending changes at a boundary', () => {
   it('spending changes exactly at the Scenario boundary, no special Event required', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Two scenarios', [
-      scenario({ name: 'A', start: '2026-01', end: '2026-06', parameters: { spending: 6_000, taxRate: 0 }, policies: [{ id: 'p', kind: 'spending', priority: 1 }] }),
-      scenario({ name: 'B', start: '2026-07', end: '2026-12', parameters: { spending: 9_000, taxRate: 0 }, policies: [{ id: 'p', kind: 'spending', priority: 1 }] }),
+      scenario({ name: 'A', start: '2026-01', end: '2026-06', parameters: { spending: 6_000, taxRate: 0 }, policies: [] }),
+      scenario({ name: 'B', start: '2026-07', end: '2026-12', parameters: { spending: 9_000, taxRate: 0 }, policies: [] }),
     ])
 
     const result = calculate(initialState, trajectory)
@@ -143,9 +141,9 @@ describe('15. Scenario Policy changes at a boundary', () => {
   it('the same income/spending produce different Financial State trajectories once the Policy changes', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
       ],
       liabilities: [],
     }
@@ -158,7 +156,6 @@ describe('15. Scenario Policy changes at a boundary', () => {
         events: [income],
         parameters: { spending: 5_000, taxRate: 0, equityReturn: 0 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -167,7 +164,7 @@ describe('15. Scenario Policy changes at a boundary', () => {
         start: '2026-07',
         end: '2026-12',
         parameters: { spending: 5_000, taxRate: 0 },
-        policies: [{ id: 'p1', kind: 'spending', priority: 1 }], // surplus defaults to Cash — no investSurplus
+        policies: [], // surplus defaults to Cash — no investSurplus
       }),
     ])
 
@@ -185,7 +182,7 @@ describe('16. Scenario economic parameters change', () => {
   it("each tick uses the parameters belonging to its own Scenario", () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Two scenarios', [
@@ -233,7 +230,7 @@ describe('18. A trajectory may end at an arbitrary date', () => {
   it('calculation stops exactly at the final Scenario\'s end — no artificial terminal date', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [scenario({ name: 'A', start: '2026-01', end: '2031-10' })])

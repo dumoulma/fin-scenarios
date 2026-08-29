@@ -14,7 +14,7 @@ describe('36. Three-scenario life trajectory', () => {
   it('produces one continuous Financial State history across work, travel, and retirement with no special handling', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 50_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 50_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Life', [
@@ -25,7 +25,6 @@ describe('36. Three-scenario life trajectory', () => {
         events: [{ id: 'evt-job', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 150_000 } }],
         parameters: { spending: 6_000, taxRate: 0.2 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
         ],
       }),
@@ -34,7 +33,7 @@ describe('36. Three-scenario life trajectory', () => {
         start: '2036-01',
         end: '2036-12', // "age 58-59"
         parameters: { spending: 15_000, taxRate: 0 },
-        policies: [{ id: 'p1', kind: 'spending', priority: 1 }, { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
+        policies: [ { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
       }),
       scenario({
         name: 'Retirement in Japan',
@@ -42,7 +41,7 @@ describe('36. Three-scenario life trajectory', () => {
         end: '2040-12', // "age 59-63"
         events: [{ id: 'evt-ss', at: '2037-01', effect: { kind: 'employmentStart', annualSalary: 30_000 } }], // Social Security stand-in
         parameters: { spending: 5_000, taxRate: 0.1 },
-        policies: [{ id: 'p1', kind: 'spending', priority: 1 }, { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
+        policies: [ { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
       }),
     ])
 
@@ -58,9 +57,9 @@ describe('37. Scenario starts with a major Event', () => {
   it('executes the property sale and moving cost at the Scenario boundary tick, then calculates B from the result', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
-        { id: 'condo', name: 'Condo', assetType: 'realEstate', holdingContext: 'none', value: 500_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'condo', name: 'Condo', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 500_000 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 200_000, linkedAssetId: 'condo' }],
     }
@@ -75,7 +74,7 @@ describe('37. Scenario starts with a major Event', () => {
           { id: 'evt-move-cost', at: '2026-07', effect: { kind: 'oneTimeCashFlow', amount: -10_000 } },
         ],
         parameters: { spending: 4_000, taxRate: 0 },
-        policies: [{ id: 'p', kind: 'spending', priority: 1 }, { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
+        policies: [ { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 }],
       }),
     ])
 
@@ -93,11 +92,11 @@ describe('38. Employment + property + investment portfolio', () => {
   it('combines property appreciation, mortgage amortization, taxable/Roth equity, employment, taxes, and an invest Policy into one coherent sequence', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 20_000 },
-        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', value: 500_000 },
-        { id: 'taxable', name: 'Taxable Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 50_000, growthRate: 0.07, distributionRate: 0.015 },
-        { id: 'roth', name: 'Roth Equity', assetType: 'equity', holdingContext: 'rothRetirement', value: 30_000, growthRate: 0.07, distributionRate: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 20_000 },
+        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 500_000 },
+        { id: 'taxable', name: 'Taxable Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 50_000, growthRate: 0.07, distributionRate: 0.015 },
+        { id: 'roth', name: 'Roth Equity', assetType: 'equity', holdingContext: 'rothRetirement', country: 'US', currency: 'USD', value: 30_000, growthRate: 0.07, distributionRate: 0 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 350_000, interestRate: 0.06, monthlyPayment: 2_100, linkedAssetId: 'home' }],
     }
@@ -109,7 +108,6 @@ describe('38. Employment + property + investment portfolio', () => {
         events: [{ id: 'evt-job', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 140_000 } }],
         parameters: { spending: 6_000, taxRate: 0.22, propertyAppreciation: 0.03 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -131,9 +129,9 @@ describe('39. Large spending Event while accumulating', () => {
   it('funds a temporary $75,000 deficit per Policy priority, then resumes normal accumulation', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 30_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0, growthRate: 0 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 30_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0, growthRate: 0 },
       ],
       liabilities: [],
     }
@@ -148,7 +146,6 @@ describe('39. Large spending Event while accumulating', () => {
         ],
         parameters: { spending: 3_000, taxRate: 0 }, // $5,000/mo surplus normally
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'investSurplus', priority: 2 },
           { id: 'p3', kind: 'fundDeficitFromCash', priority: 3 },
         ],
@@ -171,7 +168,7 @@ describe('40. Long travel Scenario with zero income', () => {
   it('declines predictably by the drawdown Policy funding the monthly deficit', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 200_000 }],
+      reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 200_000 }],
       liabilities: [],
     }
     const trajectory = createTrajectory('Solo', [
@@ -181,7 +178,6 @@ describe('40. Long travel Scenario with zero income', () => {
         end: '2026-12',
         parameters: { spending: 12_000, taxRate: 0, cashApy: 0 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
         ],
       }),
@@ -199,10 +195,10 @@ describe('41. Gift plus investment income plus spending', () => {
   it('aggregates dividends, interest, salary, and a one-time gift correctly, investing the surplus', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 50_000 }, // interest source
-        { id: 'div-eq', name: 'Dividend Equity', assetType: 'equity', holdingContext: 'none', value: 100_000, growthRate: 0, distributionRate: 0.036 }, // $300/mo
-        { id: 'brokerage', name: 'Brokerage', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 0, growthRate: 0 }, // investSurplus target
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 50_000 }, // interest source
+        { id: 'div-eq', name: 'Dividend Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000, growthRate: 0, distributionRate: 0.036 }, // $300/mo
+        { id: 'brokerage', name: 'Brokerage', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0, growthRate: 0 }, // investSurplus target
       ],
       liabilities: [],
     }
@@ -217,7 +213,6 @@ describe('41. Gift plus investment income plus spending', () => {
         ],
         parameters: { spending: 4_000, taxRate: 0, cashApy: 0.12 }, // -> $500/mo interest on the pre-gift $50,000 base... see note below
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -284,16 +279,15 @@ describe('43. Alternative Trajectory diverges from Master', () => {
 
 describe('44. Arbitrary trajectory comparison', () => {
   it('produces the same raw CalculationResult shape for materially different Trajectories', () => {
-    const initialState: FinancialState = { asOf: '2026-01', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 100_000 }], liabilities: [] }
+    const initialState: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }], liabilities: [] }
 
-    const spendPolicy = [{ id: 'p', kind: 'spending' as const, priority: 1 }]
-    const retireAt60 = createTrajectory('Retire at 60 in USA', [scenario({ name: 'A', start: '2026-01', end: '2026-12', parameters: { spending: 5_000, taxRate: 0 }, policies: spendPolicy })])
+    const retireAt60 = createTrajectory('Retire at 60 in USA', [scenario({ name: 'A', start: '2026-01', end: '2026-12', parameters: { spending: 5_000, taxRate: 0 }, policies: [] })])
     const travelThenJapan = createTrajectory('Travel then Japan', [
-      scenario({ name: 'Travel', start: '2026-01', end: '2026-06', parameters: { spending: 8_000, taxRate: 0 }, policies: spendPolicy }),
-      scenario({ name: 'Japan', start: '2026-07', end: '2026-12', parameters: { spending: 3_000, taxRate: 0 }, policies: spendPolicy }),
+      scenario({ name: 'Travel', start: '2026-01', end: '2026-06', parameters: { spending: 8_000, taxRate: 0 }, policies: [] }),
+      scenario({ name: 'Japan', start: '2026-07', end: '2026-12', parameters: { spending: 3_000, taxRate: 0 }, policies: [] }),
     ])
     const workTo65 = createTrajectory('Work to 65', [
-      scenario({ name: 'A', start: '2026-01', end: '2026-12', events: [{ id: 'e', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 100_000 } }], parameters: { spending: 5_000, taxRate: 0.2 }, policies: spendPolicy }),
+      scenario({ name: 'A', start: '2026-01', end: '2026-12', events: [{ id: 'e', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 100_000 } }], parameters: { spending: 5_000, taxRate: 0.2 }, policies: [] }),
     ])
 
     const results = [retireAt60, travelThenJapan, workTo65].map((t) => calculate(initialState, t))
@@ -313,7 +307,7 @@ describe('44. Arbitrary trajectory comparison', () => {
 
 describe('45. Same trajectory, changed economic parameters', () => {
   it('keeps the event/scenario structure identical while producing a different resulting Financial State', () => {
-    const initialState: FinancialState = { asOf: '2026-01', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 }], liabilities: [] }
+    const initialState: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }], liabilities: [] }
     const conservative = createTrajectory('Conservative', [scenario({ name: 'A', start: '2026-01', end: '2026-12', parameters: { spending: 0, taxRate: 0, equityReturn: 0.05, inflation: 0.02 } })])
 
     const aggressive = duplicateTrajectory(conservative, 'Aggressive')
@@ -332,9 +326,9 @@ describe('46. Deterministic repeatability', () => {
   it('is value-for-value equivalent across two runs of the same Initial State, Trajectory, and Parameters', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 50_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 100_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 50_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 100_000 },
       ],
       liabilities: [],
     }
@@ -346,7 +340,6 @@ describe('46. Deterministic repeatability', () => {
         events: [{ id: 'e', at: '2026-01', effect: { kind: 'employmentStart', annualSalary: 100_000 } }],
         parameters: { spending: 5_000, taxRate: 0.2, equityReturn: 0.07, cashApy: 0.02 },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -360,7 +353,7 @@ describe('46. Deterministic repeatability', () => {
 
 describe('47. Monte Carlo preserves domain inputs', () => {
   it('uses the same Trajectory and Initial State while an Input Generator supplies different equity returns per run', () => {
-    const initialState: FinancialState = { asOf: '2026-01', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 }], liabilities: [] }
+    const initialState: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }], liabilities: [] }
     const trajectory = createTrajectory('Solo', [scenario({ name: 'A', start: '2026-01', end: '2026-12', parameters: { spending: 0, taxRate: 0 } })])
 
     // a trivial "generator": a fixed sequence per call index, standing in for a real
@@ -384,7 +377,7 @@ describe('47. Monte Carlo preserves domain inputs', () => {
 
 describe('48. Monte Carlo produces an outcome distribution', () => {
   it('runs many simulations, each retaining the Financial-State-by-time shape, aggregated into median/mean/stdDev', () => {
-    const initialState: FinancialState = { asOf: '2026-01', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', value: 100_000 }], liabilities: [] }
+    const initialState: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [{ id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }], liabilities: [] }
     const trajectory = createTrajectory('Solo', [scenario({ name: 'A', start: '2026-01', end: '2035-12', parameters: { spending: 0, taxRate: 0 } })])
 
     // deterministic "randomness" for a reproducible test — a fixed sequence of
@@ -409,12 +402,12 @@ describe('49. Complex realistic trajectory', () => {
   it('produces a continuous monthly history across employment, property, a move, a travel year, and retirement with no special cases', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 40_000 },
-        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', value: 550_000 },
-        { id: 'taxable', name: 'Taxable Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 80_000, growthRate: 0.07, distributionRate: 0.015 },
-        { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', value: 150_000, growthRate: 0.07 },
-        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', value: 60_000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 40_000 },
+        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 550_000 },
+        { id: 'taxable', name: 'Taxable Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 80_000, growthRate: 0.07, distributionRate: 0.015 },
+        { id: '401k', name: '401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 150_000, growthRate: 0.07 },
+        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 60_000 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 320_000, interestRate: 0.06, monthlyPayment: 2_000, linkedAssetId: 'home' }],
     }
@@ -431,7 +424,6 @@ describe('49. Complex realistic trajectory', () => {
         ],
         parameters: { spending: 7_000, taxRate: 0.24, propertyAppreciation: 0.03, ...commonWl },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'contributeUpToLimit', priority: 2, targetHoldingContext: 'traditionalRetirement' },
           { id: 'p3', kind: 'investSurplus', priority: 3 },
         ],
@@ -446,7 +438,6 @@ describe('49. Complex realistic trajectory', () => {
         ],
         parameters: { spending: 6_500, taxRate: 0.24, ...commonWl },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'investSurplus', priority: 2 },
         ],
       }),
@@ -456,7 +447,6 @@ describe('49. Complex realistic trajectory', () => {
         end: '2032-12',
         parameters: { spending: 10_000, taxRate: 0, ...commonWl },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
         ],
       }),
@@ -470,7 +460,6 @@ describe('49. Complex realistic trajectory', () => {
         ],
         parameters: { spending: 7_500, taxRate: 0.1, ...commonWl },
         policies: [
-          { id: 'p1', kind: 'spending', priority: 1 },
           { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
           { id: 'p3', kind: 'fundDeficitFromWholeLifeLoan', priority: 3 },
           { id: 'p4', kind: 'fundDeficitFromEquitySale', priority: 4 },
@@ -498,14 +487,13 @@ describe('50. Master plan and multiple what-ifs', () => {
   it('calculates a Master plus three Alternatives with the same engine and the same output shape, comparable directly', () => {
     const initialState: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 30_000 },
-        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 100_000 }, // no per-asset override — uses the Scenario's equityReturn
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 30_000 },
+        { id: 'eq', name: 'Equity', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 100_000 }, // no per-asset override — uses the Scenario's equityReturn
       ],
       liabilities: [],
     }
     const spendPolicies = [
-      { id: 'p1', kind: 'spending' as const, priority: 1 },
       { id: 'p2', kind: 'investSurplus' as const, priority: 2 },
     ]
     const master = createTrajectory('Master', [

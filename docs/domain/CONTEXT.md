@@ -16,7 +16,7 @@ An Initial State may be populated from an external source such as Kubera rather 
 
 ### Financial State
 
-A Financial State represents what the user owns and owes at a particular point in time. It consists of Assets and Liabilities and therefore provides the basis for calculating net worth.
+A Financial State represents what the user owns and owes at a particular point in time. It consists of Assets and Liabilities and therefore provides the basis for calculating net worth. It has a reporting currency: until an explicit FX conversion is supplied, calculation and net worth may only combine Assets denominated in that reporting currency.
 
 Financial State is the state transformed by calculation over time. Income and Spending are not persistent contents of Financial State; they are inputs and calculated flows associated with the Scenario being evaluated.
 
@@ -83,6 +83,8 @@ An Asset is something with financial value that forms part of Financial State.
 The initial product supports at least cash, ordinary taxable brokerage investments, 401(k), Traditional IRA, Roth IRA, HSA, high cash-value Whole Life insurance, and primary residential property.
 
 Assets are represented at whatever modeling fidelity is useful to the user. A user may model an entire Equity position as one Asset, distinguish asset classes such as US Equity and Fixed Income, distinguish multiple positions with different expected behavior, or eventually represent individual securities. The domain does not require ticker-level fidelity.
+
+Every Asset records its country and the currency in which its value is denominated. Country is a fact about the position's jurisdiction; it does not itself select behavior or tax rules. Currency preserves source information. FX conversion is deliberately outside the current engine: a Financial State may only be calculated when each Asset's currency matches its reporting currency.
 
 ### Asset Type
 

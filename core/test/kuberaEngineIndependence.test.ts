@@ -12,10 +12,10 @@ describe('the engine has no dependency on Kubera-specific concepts', () => {
   it('calculates a Trajectory from a plain, importer-shaped Initial State using only domain types', () => {
     const initialState: InitialState = {
       asOf: '2026-08',
-      assets: [
-        { id: 'cash', name: 'cash (none)', assetType: 'cash', holdingContext: 'none', value: 51_080.89 },
-        { id: 'brokerage', name: 'Fairview Brokerage', assetType: 'equity', holdingContext: 'taxableBrokerage', value: 214_870.33 },
-        { id: '401k', name: 'equity (traditionalRetirement)', assetType: 'equity', holdingContext: 'traditionalRetirement', value: 152_975.52 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'cash (none)', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 51_080.89 },
+        { id: 'brokerage', name: 'Fairview Brokerage', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 214_870.33 },
+        { id: '401k', name: 'equity (traditionalRetirement)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 152_975.52 },
       ],
       liabilities: [{ id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 412_650.88 }],
     }
@@ -27,7 +27,6 @@ describe('the engine has no dependency on Kubera-specific concepts', () => {
       events: [],
       parameters: { spending: 5000, taxRate: 0.2, equityReturn: 0.07, cashApy: 0.02 },
       policies: [
-        { id: 'p1', kind: 'spending', priority: 1 },
         { id: 'p2', kind: 'fundDeficitFromCash', priority: 2 },
       ],
     })

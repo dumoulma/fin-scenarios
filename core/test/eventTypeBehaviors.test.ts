@@ -46,7 +46,7 @@ describe('isPointEventActiveAt', () => {
 function baseState(): FinancialState {
   return {
     asOf: '2026-01',
-    assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 1000 }],
+    reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 1000 }],
     liabilities: [],
   }
 }
@@ -66,9 +66,9 @@ describe('applyPointEvent', () => {
   it('sellProperty removes the property and its linked mortgage, netting proceeds to cash', () => {
     const state: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
-        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', value: 500000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 500000 },
       ],
       liabilities: [{ id: 'm', name: 'Mortgage', kind: 'mortgage', balance: 200000, linkedAssetId: 'home' }],
     }
@@ -81,9 +81,9 @@ describe('applyPointEvent', () => {
   it('wholeLifePolicyLoan increases cash and the loan balance without reducing the policy value', () => {
     const state: FinancialState = {
       asOf: '2026-01',
-      assets: [
-        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 },
-        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', value: 50000 },
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 50000 },
       ],
       liabilities: [],
     }

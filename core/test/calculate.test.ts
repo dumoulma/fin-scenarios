@@ -14,7 +14,7 @@ describe('calculate — monthly coherence', () => {
       scenario({ name: 'A', start: '2026-01', end: '2026-06' }),
       scenario({ name: 'B', start: '2026-07', end: '2027-06' }),
     ])
-    const state: FinancialState = { asOf: '2026-01', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', value: 0 }], liabilities: [] }
+    const state: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [{ id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 }], liabilities: [] }
 
     const result = calculate(state, trajectory)
 
@@ -36,7 +36,7 @@ describe('calculate — monthly coherence', () => {
     const a = scenario({ name: 'A', start: '2026-01', end: '2026-06' })
     const b = scenario({ name: 'B', start: '2026-08', end: '2026-12' })
     const trajectory: Trajectory = { id: 't', name: 't', scenarios: [a, b] }
-    const state: FinancialState = { asOf: '2026-01', assets: [], liabilities: [] }
+    const state: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [], liabilities: [] }
     expect(() => calculate(state, trajectory)).toThrow(TrajectoryInvariantError)
   })
 
