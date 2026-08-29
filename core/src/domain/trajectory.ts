@@ -155,6 +155,39 @@ export function resizeScenario(trajectory: Trajectory, scenarioId: string, newDu
   return { ...trajectory, scenarios }
 }
 
+/**
+ * Boundary-drag insert, the inverse of resizeScenario: the new Scenario is spliced
+ * in right after `afterScenarioId`, taking its duration from the immediate
+ * successor, whose own end stays fixed (only its start moves forward). Nothing
+ * beyond that one neighbor changes. Inserting after the last Scenario simply
+ * extends the Trajectory, since there is no successor to absorb anything from.
+ */
+export function insertScenario(trajectory: Trajectory, afterScenarioId: string, newScenario: Omit<ScenarioInput, 'start' | 'end'>, durationInMonths: number): Trajectory {
+  if (durationInMonths < 1) {
+    throw new TrajectoryInvariantError('A Scenario must be at least one month long')
+  }
+  const index = findIndexOrThrow(trajectory, afterScenarioId)
+  const previous = trajectory.scenarios[index]!
+  const start = addMonths(previous.end, 1)
+  const end = addMonths(start, durationInMonths - 1)
+  const inserted = createScenario({ ...newScenario, start, end })
+
+  const scenarios = [...trajectory.scenarios]
+  scenarios.splice(index + 1, 0, inserted)
+
+  const next = trajectory.scenarios[index + 1]
+  if (next) {
+    const nextStart = addMonths(end, 1)
+    if (compareYearMonth(nextStart, next.end) > 0) {
+      throw new TrajectoryInvariantError(`Inserting "${newScenario.name}" for ${durationInMonths} month(s) would leave "${next.name}" with zero or negative duration`)
+    }
+    scenarios[index + 2] = { ...next, start: nextStart }
+  }
+
+  validateTrajectory(scenarios)
+  return { ...trajectory, scenarios }
+}
+
 export function duplicateTrajectory(trajectory: Trajectory, newName: string): Trajectory {
   return { id: randomId(), name: newName, scenarios: trajectory.scenarios }
 }
