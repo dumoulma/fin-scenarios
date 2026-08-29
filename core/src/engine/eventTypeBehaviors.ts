@@ -51,13 +51,15 @@ export function applyPointEvent(state: FinancialState, event: Event): FinancialS
       return state
 
     case 'oneTimeCashFlow': {
-      const assets = state.assets.map((a) => (a.assetType === 'cash' ? { ...a, value: a.value + effect.amount } : a))
+      const cash = state.assets.find((asset) => asset.assetType === 'cash')
+      const assets = cash ? state.assets.map((asset) => (asset.id === cash.id ? { ...asset, value: asset.value + effect.amount } : asset)) : state.assets
       return { ...state, assets }
     }
 
     case 'buyProperty': {
       const cashOut = effect.downPayment + (effect.transactionCost ?? 0)
-      const assets = state.assets.map((a) => (a.assetType === 'cash' ? { ...a, value: a.value - cashOut } : a)).concat(effect.asset)
+      const cash = state.assets.find((asset) => asset.assetType === 'cash')
+      const assets = (cash ? state.assets.map((asset) => (asset.id === cash.id ? { ...asset, value: asset.value - cashOut } : asset)) : state.assets).concat(effect.asset)
       const liabilities = effect.mortgage ? [...state.liabilities, effect.mortgage] : state.liabilities
       return { ...state, assets, liabilities }
     }
@@ -67,9 +69,10 @@ export function applyPointEvent(state: FinancialState, event: Event): FinancialS
       if (!property || property.assetType !== 'realEstate') return state
       const mortgage = state.liabilities.find((l) => l.linkedAssetId === effect.assetId)
       const netProceeds = property.value - (mortgage?.balance ?? 0)
+      const cash = state.assets.find((asset) => asset.assetType === 'cash')
       const assets = state.assets
         .filter((a) => a.id !== effect.assetId)
-        .map((a) => (a.assetType === 'cash' ? { ...a, value: a.value + netProceeds } : a))
+        .map((asset) => (asset.id === cash?.id ? { ...asset, value: asset.value + netProceeds } : asset))
       const liabilities = state.liabilities.filter((l) => l.linkedAssetId !== effect.assetId)
       return { ...state, assets, liabilities }
     }
@@ -78,13 +81,15 @@ export function applyPointEvent(state: FinancialState, event: Event): FinancialS
       const withLoan = state.assets.map((a) =>
         a.id === effect.assetId && a.assetType === 'wholeLifeInsurance' ? { ...a, policyLoanBalance: (a.policyLoanBalance ?? 0) + effect.amount } : a,
       )
-      const assets = withLoan.map((a) => (a.assetType === 'cash' ? { ...a, value: a.value + effect.amount } : a))
+      const cash = withLoan.find((asset) => asset.assetType === 'cash')
+      const assets = cash ? withLoan.map((asset) => (asset.id === cash.id ? { ...asset, value: asset.value + effect.amount } : asset)) : withLoan
       return { ...state, assets }
     }
 
     case 'wholeLifeWithdrawal': {
       const withdrawn = state.assets.map((a) => (a.id === effect.assetId && a.assetType === 'wholeLifeInsurance' ? { ...a, value: a.value - effect.amount } : a))
-      const assets = withdrawn.map((a) => (a.assetType === 'cash' ? { ...a, value: a.value + effect.amount } : a))
+      const cash = withdrawn.find((asset) => asset.assetType === 'cash')
+      const assets = cash ? withdrawn.map((asset) => (asset.id === cash.id ? { ...asset, value: asset.value + effect.amount } : asset)) : withdrawn
       return { ...state, assets }
     }
   }

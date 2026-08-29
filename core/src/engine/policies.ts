@@ -22,7 +22,7 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
     const shortfall = Math.max(0, target - cash.value)
     const claim = Math.min(pool, shortfall)
     if (claim <= 0) return { pool, state }
-    const assets = state.assets.map((a) => (a.assetType === 'cash' ? { ...a, value: a.value + claim } : a))
+    const assets = state.assets.map((asset) => (asset.id === cash.id ? { ...asset, value: asset.value + claim } : asset))
     return { pool: pool - claim, state: { ...state, assets } }
   },
 

@@ -137,9 +137,10 @@ export function calculate(
     })
 
     // 9. whatever's left (or short) defaults to cash — the next Financial State
+    const cash = afterPolicies.assets.find((asset) => asset.assetType === 'cash')
     state = {
       ...afterPolicies,
-      assets: afterPolicies.assets.map((asset) => (asset.assetType === 'cash' ? { ...asset, value: asset.value + remainingPool } : asset)),
+      assets: cash ? afterPolicies.assets.map((asset) => (asset.id === cash.id ? { ...asset, value: asset.value + remainingPool } : asset)) : afterPolicies.assets,
     }
 
     monthly.push(state)

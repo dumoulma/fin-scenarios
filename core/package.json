@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:properties": "vitest run test/property",
     "dev": "tsx src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "fast-check": "^4.9.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
