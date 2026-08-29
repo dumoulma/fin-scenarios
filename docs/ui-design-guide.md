@@ -132,6 +132,16 @@ Dragging a boundary should adjust the neighboring Scenario rather than creating 
 
 The user should not have to manually repair gaps.
 
+### Confirmed interaction (validated against a working prototype)
+
+Three specific mechanics were built and tested end-to-end, and the direction is confirmed — treat these as decided, not open questions:
+
+**Drag to resize.** Grabbing the edge between two Scenarios and dragging it moves the shared boundary. Only the *immediate* neighbor absorbs the change, by keeping its own far end fixed and letting its own duration shrink or grow. Nothing further down the Trajectory moves. This is not a UI-only rule — it matches the engine's actual `resizeScenario` behavior, so the UI and the domain must never disagree about what "resize" means.
+
+**Click to insert, don't open a dialog.** Hovering the gap between two Scenarios reveals a small "+" affordance. Clicking it immediately splits the *right-hand* neighbor's remaining duration in half and inserts a new, renamable, deletable Scenario there — no duration prompt, no form. The user adjusts the new Scenario's length afterward by dragging its edges, same as any other boundary. Insert-then-adjust felt right in testing; configure-then-insert (a popover asking for a duration up front) did not get built for a reason — it's a step closer to "form," and this product should feel like direct manipulation instead (see §22, Avoid Calculator UI).
+
+**Click the chart to inspect a point in time.** Below the trajectory visualization, a summary strip shows net worth (and the year, and change from the start) for a selected point. By default it shows the end of the Trajectory. Clicking anywhere on the net-worth chart moves the selection to that point and updates the summary immediately.
+
 ## 6. Scenario Content
 
 A Scenario contains:
@@ -374,6 +384,8 @@ The visualization should always correspond to the currently selected Trajectory.
 When the user changes a Scenario: recalculate → visualization updates.
 
 The experience should feel immediate.
+
+Confirmed in prototype: the visualization is clickable, not just readable — see §5's "Confirmed interaction" for the click-to-inspect-a-point behavior, and keep the visualization's time axis aligned with the Scenario timeline above it so a boundary drag and a chart inflection point visibly correspond to the same moment.
 
 ## 14. One Trajectory at a Time
 
