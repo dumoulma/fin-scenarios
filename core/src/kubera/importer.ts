@@ -1,6 +1,6 @@
 import type { Asset, AssetType, HoldingContext, InitialState, Liability } from '../domain/types.ts'
 import { classify } from './mapping.ts'
-import type { KuberaItem, KuberaSnapshot } from './types.ts'
+import type { KuberaItem, KuberaSnapshot, MappingOverrides } from './types.ts'
 
 export type ImportSummary = {
   recognized: { source: string; mappedTo: string }[]
@@ -27,23 +27,17 @@ const KUBERA_COUNTRY_TO_ISO: Record<string, string> = { usa: 'US', canada: 'CA',
 // Kubera reports geography.country as the literal string "others" for some
 // manually-entered/unlinked items (confirmed live: a Whole Life policy, a
 // mortgage, a directly-entered property) — it genuinely has no geo data for
-// them, so there's nothing generic to map. These specific, named accounts are
-// confirmed real and US-based; this is a targeted fix for known accounts (the
-// same shape as mapping.ts's KNOWN_401K_PROVIDER_PATTERN), not a rule that
-// assumes "others" means US in general — an unnamed "others" item still
-// correctly surfaces for manual input below. `/^mortgage$/i` is intentionally
-// bare (Kubera's real mortgage liability here has no more specific name) —
-// this only makes sense for a personal deployment modeling one known
-// portfolio; a shared/multi-tenant version would need a less generic anchor.
-const KNOWN_US_ACCOUNTS_WITHOUT_GEOGRAPHY = [/guardian/i, /530 gregory/i, /^mortgage$/i]
-
-function resolveCountry(item: KuberaItem): { country: string } | { error: string } {
+// them, so there's nothing generic to map. Resolving that is exactly what
+// MappingOverrides.country is for; this function has no hardcoded knowledge of
+// any specific account.
+function resolveCountry(item: KuberaItem, overrides: MappingOverrides = {}): { country: string } | { error: string } {
+  const overrideCountry = overrides[item.id]?.country
+  if (overrideCountry) return { country: overrideCountry }
   const raw = item.geography?.country
   if (raw) {
     const iso = KUBERA_COUNTRY_TO_ISO[raw.toLowerCase()]
     if (iso) return { country: iso }
   }
-  if (KNOWN_US_ACCOUNTS_WITHOUT_GEOGRAPHY.some((pattern) => pattern.test(item.name))) return { country: 'US' }
   if (!raw) return { error: 'missing country' }
   return { error: `unrecognized country "${raw}"` }
 }
@@ -78,8 +72,17 @@ type RecognizedLiability = { item: KuberaItem; amount: number }
  * function's output is built entirely from existing domain types (InitialState,
  * Asset, Liability). Nothing downstream (the calculation engine, a Trajectory)
  * needs to know Kubera exists.
+ *
+ * `overrides` is the seam for correcting whatever the automatic classifier/
+ * geography lookup can't resolve on its own — supplied by a caller (eventually
+ * a "Connect Kubera" UI, where a person or an AI-assistant's first pass fills
+ * these in), never hardcoded here.
  */
-export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency: string = snapshot.baseCurrency): { initialState: InitialState; summary: ImportSummary } {
+export function importKuberaSnapshot(
+  snapshot: KuberaSnapshot,
+  overrides: MappingOverrides = {},
+  reportingCurrency: string = snapshot.baseCurrency,
+): { initialState: InitialState; summary: ImportSummary } {
   const recognizedSummary: ImportSummary['recognized'] = []
   const ignored: ImportSummary['ignored'] = []
   const needsManualInput: ImportSummary['needsManualInput'] = []
@@ -88,7 +91,7 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
   const recognizedLiabilities: RecognizedLiability[] = []
 
   for (const item of snapshot.items) {
-    const classification = classify(item)
+    const classification = classify(item, overrides)
 
     if (classification.outcome === 'ignored') {
       ignored.push({ source: item.name, reason: classification.reason })
@@ -111,7 +114,7 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
       unsupportedCurrency.push({ source: item.name, currency: resolved.currency })
       continue
     }
-    const resolvedCountry = resolveCountry(item)
+    const resolvedCountry = resolveCountry(item, overrides)
     if ('error' in resolvedCountry) {
       needsManualInput.push({ source: item.name, reason: resolvedCountry.error })
       continue

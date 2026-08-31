@@ -1,5 +1,5 @@
 import type { AssetType, HoldingContext } from '../domain/types.ts'
-import type { KuberaItem } from './types.ts'
+import type { KuberaItem, MappingOverrides } from './types.ts'
 
 export type Classification =
   | { outcome: 'recognizedAsset'; assetType: AssetType; holdingContext: HoldingContext }
@@ -12,17 +12,12 @@ const FOUR_OH_ONE_K_PATTERN = /401\s*\(?k\)?/i
 const IRA_PATTERN = /\bira\b/i
 const HSA_PATTERN = /\bhsa\b|health savings/i
 const WHOLE_LIFE_PATTERN = /whole\s*life/i
-// Payroll-401(k) platforms whose account names don't literally say "401(k)" — a
-// real gap found against a real account (Gusto/Guideline). Inherently incomplete;
-// an unlisted provider still correctly falls to needsManualInput rather than a
-// silent wrong guess.
-const KNOWN_401K_PROVIDER_PATTERN = /guideline/i
 
 function classifyRetirementAccount(item: KuberaItem): Classification {
   if (ROTH_PATTERN.test(item.name)) {
     return { outcome: 'recognizedAsset', assetType: 'equity', holdingContext: 'rothRetirement' }
   }
-  if (FOUR_OH_ONE_K_PATTERN.test(item.name) || IRA_PATTERN.test(item.name) || KNOWN_401K_PROVIDER_PATTERN.test(item.name)) {
+  if (FOUR_OH_ONE_K_PATTERN.test(item.name) || IRA_PATTERN.test(item.name)) {
     return { outcome: 'recognizedAsset', assetType: 'equity', holdingContext: 'traditionalRetirement' }
   }
   return {
@@ -83,7 +78,14 @@ function classifyLiability(item: KuberaItem): Classification {
   return { outcome: 'ignored', reason: `unsupported liability category: sheet="${item.sheetName}"` }
 }
 
-export function classify(item: KuberaItem): Classification {
+export function classify(item: KuberaItem, overrides: MappingOverrides = {}): Classification {
+  const override = overrides[item.id]
+  if (override?.assetType && override.holdingContext) {
+    return { outcome: 'recognizedAsset', assetType: override.assetType, holdingContext: override.holdingContext }
+  }
+  if (override?.liabilityKind) {
+    return { outcome: 'recognizedLiability', liabilityKind: override.liabilityKind }
+  }
   if (item.parent) {
     return {
       outcome: 'ignored',

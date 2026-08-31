@@ -25,7 +25,7 @@ describe('1. a simple Kubera asset becomes one Asset Position', () => {
     const snapshot = snapshotOf([
       { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', geography: { country: 'canada', region: 'other' }, subType: 'cash', value: { amount: 500, currency: 'CAD' } },
     ])
-    const { initialState } = importKuberaSnapshot(snapshot, 'CAD')
+    const { initialState } = importKuberaSnapshot(snapshot, {}, 'CAD')
     expect(initialState.assets[0]!.country).toBe('CA')
   })
 
@@ -37,26 +37,42 @@ describe('1. a simple Kubera asset becomes one Asset Position', () => {
     expect(initialState.assets).toHaveLength(0)
     expect(summary.needsManualInput).toContainEqual({ source: 'Checking', reason: 'unrecognized country "atlantis"' })
   })
+})
 
-  it('resolves country for known real accounts Kubera reports as "others" — a targeted fix for a specific confirmed account, not a general guess', () => {
+describe('mapping overrides — a caller-supplied correction for one specific item, keyed by its stable id', () => {
+  it('an override resolves an item the automatic classifier could not, without any hardcoded knowledge of the account', () => {
     const snapshot = snapshotOf([
-      { id: 'a1', name: 'Guardian Life - Whole Life 95 (Cash Value)', sectionName: 'USA', sheetName: 'Retirement Investments', category: 'asset', subType: 'other', geography: { country: 'others', region: 'other' }, value: { amount: 10_000, currency: 'USD' } },
-      { id: 'a2', name: '530 Gregory Ave c311', sectionName: 'Section 1', sheetName: 'Real Estate', category: 'asset', subType: 'primary residence', geography: { country: 'others', region: 'other' }, value: { amount: 500_000, currency: 'USD' } },
-      { id: 'd1', name: 'Mortgage', sectionName: 'Section 1', sheetName: 'Loans', category: 'debt', geography: { country: 'others', region: 'other' }, value: { amount: 300_000, currency: 'USD' } },
+      { id: 'a1', name: 'Gusto/Guideline - ***3237', sectionName: 'USA', sheetName: 'Retirement Investments', category: 'asset', geography: { country: 'usa', region: 'other' }, subType: 'investment', value: { amount: 12_000, currency: 'USD' } },
     ])
-    const { initialState, summary } = importKuberaSnapshot(snapshot)
-    expect(summary.needsManualInput).toEqual([])
-    expect(initialState.assets.find((a) => a.assetType === 'wholeLifeInsurance')!.country).toBe('US')
-    expect(initialState.assets.find((a) => a.assetType === 'realEstate')!.country).toBe('US')
-    expect(initialState.liabilities).toHaveLength(1)
+    // with no override, this genuinely can't be identified from its name
+    const withoutOverride = importKuberaSnapshot(snapshot)
+    expect(withoutOverride.initialState.assets).toHaveLength(0)
+    expect(withoutOverride.summary.needsManualInput).toHaveLength(1)
+
+    const withOverride = importKuberaSnapshot(snapshot, { a1: { assetType: 'equity', holdingContext: 'traditionalRetirement' } })
+    expect(withOverride.summary.needsManualInput).toEqual([])
+    expect(withOverride.initialState.assets[0]).toMatchObject({ assetType: 'equity', holdingContext: 'traditionalRetirement', value: 12_000 })
   })
 
-  it('still surfaces an unnamed item with country "others" for manual input — the override is per known account, not blanket for "others"', () => {
+  it('an override resolves a country the automatic geography lookup could not', () => {
     const snapshot = snapshotOf([
-      { id: 'a1', name: 'Some Unrelated Manual Entry', sectionName: 'USA', sheetName: 'Cash', category: 'asset', subType: 'cash', geography: { country: 'others', region: 'other' }, value: { amount: 100, currency: 'USD' } },
+      { id: 'a1', name: 'Guardian Life - Whole Life 95 (Cash Value)', sectionName: 'USA', sheetName: 'Retirement Investments', category: 'asset', subType: 'other', geography: { country: 'others', region: 'other' }, value: { amount: 10_000, currency: 'USD' } },
     ])
-    const { summary } = importKuberaSnapshot(snapshot)
-    expect(summary.needsManualInput).toContainEqual({ source: 'Some Unrelated Manual Entry', reason: 'unrecognized country "others"' })
+    const withoutOverride = importKuberaSnapshot(snapshot)
+    expect(withoutOverride.summary.needsManualInput).toContainEqual({ source: 'Guardian Life - Whole Life 95 (Cash Value)', reason: 'unrecognized country "others"' })
+
+    const withOverride = importKuberaSnapshot(snapshot, { a1: { country: 'US' } })
+    expect(withOverride.summary.needsManualInput).toEqual([])
+    expect(withOverride.initialState.assets[0]).toMatchObject({ assetType: 'wholeLifeInsurance', country: 'US' })
+  })
+
+  it('an override for one item never affects a different item with the same "others" country or an unmapped provider name', () => {
+    const snapshot = snapshotOf([
+      { id: 'a1', name: 'Guardian Life - Whole Life 95 (Cash Value)', sectionName: 'USA', sheetName: 'Retirement Investments', category: 'asset', subType: 'other', geography: { country: 'others', region: 'other' }, value: { amount: 10_000, currency: 'USD' } },
+      { id: 'a2', name: 'Some Other Manual Entry', sectionName: 'USA', sheetName: 'Cash', category: 'asset', subType: 'cash', geography: { country: 'others', region: 'other' }, value: { amount: 100, currency: 'USD' } },
+    ])
+    const { summary } = importKuberaSnapshot(snapshot, { a1: { country: 'US' } })
+    expect(summary.needsManualInput).toContainEqual({ source: 'Some Other Manual Entry', reason: 'unrecognized country "others"' })
   })
 })
 
@@ -97,7 +113,7 @@ describe('4. a retirement account maps to the correct Holding Context', () => {
     expect(hsa.value).toBeCloseTo(4200, 2)
   })
 
-  it('recognizes a 401(k) held at a known payroll-401(k) provider whose account name never says "401(k)" (e.g. Guideline)', () => {
+  it('a 401(k) held at a provider whose name never says "401(k)" needs manual input by default — see the mapping-overrides tests for how it gets resolved', () => {
     const { initialState, summary } = importKuberaSnapshot(
       snapshotOf([
         {
@@ -112,8 +128,8 @@ describe('4. a retirement account maps to the correct Holding Context', () => {
         },
       ]),
     )
-    expect(summary.needsManualInput).toEqual([])
-    expect(initialState.assets.find((a) => a.holdingContext === 'traditionalRetirement')!.value).toBeCloseTo(12_000, 2)
+    expect(initialState.assets).toHaveLength(0)
+    expect(summary.needsManualInput).toHaveLength(1)
   })
 })
 
