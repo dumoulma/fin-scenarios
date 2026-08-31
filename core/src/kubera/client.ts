@@ -45,18 +45,23 @@ export async function listPortfolios(credentials: KuberaCredentials): Promise<Ku
 }
 
 type RawKuberaPortfolioData = {
-  currency: string
   timestamp: string
   asset: KuberaItem[]
   debt: KuberaItem[]
 }
 
-export async function getPortfolioData(credentials: KuberaCredentials, portfolioId: string): Promise<KuberaSnapshot> {
+// The portfolio-detail endpoint doesn't reliably return its own top-level
+// currency field (confirmed against the live API: it comes back undefined,
+// even though every item's own value.currency is present) — the list endpoint
+// (listPortfolios) is the reliable source for a portfolio's base currency, so
+// the caller must supply it rather than this function guessing from a field
+// that may not be there.
+export async function getPortfolioData(credentials: KuberaCredentials, portfolioId: string, baseCurrency: string): Promise<KuberaSnapshot> {
   const envelope = await request<KuberaEnvelope<RawKuberaPortfolioData>>(credentials, 'GET', `/portfolio/${portfolioId}`)
   const data = envelope.data
   return {
     asOfDate: data.timestamp.slice(0, 10),
-    baseCurrency: data.currency,
+    baseCurrency,
     items: [...data.asset, ...data.debt],
   }
 }

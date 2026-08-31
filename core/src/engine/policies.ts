@@ -2,15 +2,33 @@ import type { GetParam } from './assetTypeBehaviors.ts'
 import type { FinancialState, Policy, PolicyKind } from '../domain/types.ts'
 
 // annualContributions is engine-internal bookkeeping, not FinancialState — a
-// calendar-year running total per targetHoldingContext, shared across whichever
-// Policies claim into it (contributeUpToLimit, contributeFixedAmount), so a
-// capped account can't be over-funded by combining more than one Policy against
-// it. Mutated in place by convention: calculate.ts owns one Map per calendar
-// year (reset every January) and passes the same reference through every tick's
-// ctx, rather than threading it through every handler's return value for one
-// cross-cutting concern.
+// running total per Policy-owned key, shared across whichever Policies claim into
+// it (contributeUpToLimit, contributeFixedAmount, contributeToWholeLifePUAAnnually),
+// so a capped account can't be over-funded by combining more than one Policy
+// against it. Mutated in place by convention: calculate.ts owns one Map and
+// passes the same reference through every tick's ctx, rather than threading it
+// through every handler's return value for one cross-cutting concern. Each key
+// resets on its OWN Policy.resetMonth (calculate.ts), not a single blanket wipe —
+// a real account's cap doesn't necessarily reset on the calendar year.
 export type PolicyContext = { spendingAmount: number; grossIncome: number; matchRate: number; matchLimitPercentOfSalary: number; annualContributions: Map<string, number> }
 export type PolicyHandler = (pool: number, state: FinancialState, getParam: GetParam, ctx: PolicyContext, policy: Policy) => { pool: number; state: FinancialState }
+
+// The single source of truth for "which annualContributions slot does this Policy
+// own" — used both to reset a slot on its Policy's own anniversary (calculate.ts)
+// and to read/write it here, so the two can never drift out of sync. undefined
+// means this Policy kind doesn't use annualContributions at all.
+export function annualContributionsKeyFor(policy: Policy): string | undefined {
+  switch (policy.kind) {
+    case 'contributeUpToLimit':
+      return policy.targetHoldingContext
+    case 'contributeFixedAmount':
+      return policy.targetAssetId ?? policy.targetHoldingContext
+    case 'contributeToWholeLifePUAAnnually':
+      return policy.targetAssetId ?? 'wholeLifePUAAnnually'
+    default:
+      return undefined
+  }
+}
 
 /**
  * docs/architecture.md: "reconcile(netCashPosition, financialState, policies)"
@@ -62,16 +80,17 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
   // targetHoldingContext, only what's left of the annual cap is available here —
   // an account can't be over-funded just because two Policies both target it.
   contributeUpToLimit: (pool, state, getParam, ctx, policy) => {
-    if (pool <= 0 || !policy.targetHoldingContext) return { pool, state }
+    const key = annualContributionsKeyFor(policy)
+    if (pool <= 0 || !key) return { pool, state }
     const account = state.assets.find((a) => a.holdingContext === policy.targetHoldingContext)
     if (!account) return { pool, state }
-    const annualLimit = getParam(`${policy.targetHoldingContext}AnnualLimit`)
-    const alreadyContributed = ctx.annualContributions.get(policy.targetHoldingContext) ?? 0
+    const annualLimit = getParam(`${key}AnnualLimit`)
+    const alreadyContributed = ctx.annualContributions.get(key) ?? 0
     const remainingCap = Math.max(0, annualLimit - alreadyContributed)
     const claim = Math.min(pool, annualLimit / 12, remainingCap)
     if (claim <= 0) return { pool, state }
     const assets = state.assets.map((a) => (a.id === account.id ? { ...a, value: a.value + claim } : a))
-    ctx.annualContributions.set(policy.targetHoldingContext, alreadyContributed + claim)
+    ctx.annualContributions.set(key, alreadyContributed + claim)
     return { pool: pool - claim, state: { ...state, assets } }
   },
 
@@ -80,18 +99,25 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
   // more surplus this month. Shares the same calendar-year running total as
   // contributeUpToLimit when both target the same account, via the same
   // `${targetHoldingContext}AnnualLimit` (absent means no annual cap applies here).
+  //
+  // targetAssetId points this at one specific named Asset (e.g. a single ETF) with
+  // its own param key, mirroring maintainCashReserve's pattern — this is what lets
+  // two Assets sharing a holdingContext (e.g. two ETFs both in taxableBrokerage)
+  // each get their own independent fixed monthly contribution. Without it, falls
+  // back unchanged to the original holding-context-keyed behavior.
   contributeFixedAmount: (pool, state, getParam, ctx, policy) => {
-    if (pool <= 0 || !policy.targetHoldingContext) return { pool, state }
-    const account = state.assets.find((a) => a.holdingContext === policy.targetHoldingContext)
+    const key = annualContributionsKeyFor(policy)
+    if (pool <= 0 || !key) return { pool, state }
+    const account = policy.targetAssetId ? state.assets.find((a) => a.id === policy.targetAssetId) : state.assets.find((a) => a.holdingContext === policy.targetHoldingContext)
     if (!account) return { pool, state }
-    const fixedAmount = getParam(`${policy.targetHoldingContext}FixedMonthlyAmount`)
-    const annualLimit = getParam(`${policy.targetHoldingContext}AnnualLimit`)
-    const alreadyContributed = ctx.annualContributions.get(policy.targetHoldingContext) ?? 0
+    const fixedAmount = getParam(`${key}FixedMonthlyAmount`)
+    const annualLimit = getParam(`${key}AnnualLimit`)
+    const alreadyContributed = ctx.annualContributions.get(key) ?? 0
     const remainingCap = annualLimit > 0 ? Math.max(0, annualLimit - alreadyContributed) : Infinity
     const claim = Math.min(pool, fixedAmount, remainingCap)
     if (claim <= 0) return { pool, state }
     const assets = state.assets.map((a) => (a.id === account.id ? { ...a, value: a.value + claim } : a))
-    ctx.annualContributions.set(policy.targetHoldingContext, alreadyContributed + claim)
+    ctx.annualContributions.set(key, alreadyContributed + claim)
     return { pool: pool - claim, state: { ...state, assets } }
   },
 
@@ -194,6 +220,57 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
     const netToValue = claim * (1 - getParam('wholeLifePuaChargeRate'))
     const assets = state.assets.map((a) => (a.id === policy.id ? { ...a, value: a.value + netToValue } : a))
     return { pool: pool - claim, state: { ...state, assets } }
+  },
+
+  // A sibling of contributeToWholeLifePUA, not a replacement — that one claims a
+  // smooth monthly-equivalent slice forever (no annual bookkeeping at all, so it
+  // only stays under the real cap by coincidence when income is smooth). This one
+  // tracks a real running total via ctx.annualContributions (resetting on its own
+  // Policy.resetMonth — a Whole Life rider's policy-year anniversary, not
+  // necessarily January) and claims no more than what's actually left of the
+  // annual cap, with no monthly division — so a single large inflow (e.g. an
+  // annual bonus) can fund the whole year's PUA room in one lump.
+  contributeToWholeLifePUAAnnually: (pool, state, getParam, ctx, policy) => {
+    const key = annualContributionsKeyFor(policy)!
+    if (pool <= 0) return { pool, state }
+    const wholeLifePolicy = policy.targetAssetId ? state.assets.find((a) => a.id === policy.targetAssetId) : state.assets.find((a) => a.assetType === 'wholeLifeInsurance')
+    if (!wholeLifePolicy) return { pool, state }
+    const annualMax = getParam('wholeLifePuaAnnualMax')
+    const alreadyContributed = ctx.annualContributions.get(key) ?? 0
+    const remainingCap = Math.max(0, annualMax - alreadyContributed)
+    const claim = Math.min(pool, remainingCap)
+    if (claim <= 0) return { pool, state }
+    const netToValue = claim * (1 - getParam('wholeLifePuaChargeRate'))
+    const assets = state.assets.map((a) => (a.id === wholeLifePolicy.id ? { ...a, value: a.value + netToValue } : a))
+    ctx.annualContributions.set(key, alreadyContributed + claim)
+    return { pool: pool - claim, state: { ...state, assets } }
+  },
+
+  // Moves a fraction of whatever sits above a source Asset's reserve target (the
+  // same `${sourceAssetId}CashReserveTarget` param maintainCashReserve reads) into
+  // a destination Asset — unlike every other Policy here, this doesn't touch pool
+  // at all; it rebalances money that's already landed (e.g. a bonus that went
+  // straight to cash via oneTimeCashFlow). Two instances with fractions 0.7 and
+  // 1.0 split the excess 70/30 between two destinations: the first sweeps 70% of
+  // the excess, the second sweeps 100% of whatever's left (exactly the remaining
+  // 30% of the original excess) — no shared state needed between them beyond
+  // running in priority order against the same, already-reduced source balance.
+  sweepCashAboveTarget: (pool, state, getParam, _ctx, policy) => {
+    if (!policy.sourceAssetId || !policy.targetAssetId) return { pool, state }
+    const source = state.assets.find((a) => a.id === policy.sourceAssetId)
+    const destination = state.assets.find((a) => a.id === policy.targetAssetId)
+    if (!source || !destination) return { pool, state }
+    const target = getParam(`${policy.sourceAssetId}CashReserveTarget`)
+    const excess = Math.max(0, source.value - target)
+    const fraction = getParam(`${policy.targetAssetId}SweepFraction`)
+    const amount = excess * fraction
+    if (amount <= 0) return { pool, state }
+    const assets = state.assets.map((a) => {
+      if (a.id === source.id) return { ...a, value: a.value - amount }
+      if (a.id === destination.id) return { ...a, value: a.value + amount }
+      return a
+    })
+    return { pool, state: { ...state, assets } }
   },
 }
 

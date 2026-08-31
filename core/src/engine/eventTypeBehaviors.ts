@@ -32,6 +32,16 @@ export function activeEmploymentMatchAt(scenarioEvents: Event[], tick: YearMonth
   return { matchRate: active?.matchRate ?? 0, matchLimitPercentOfSalary: active?.matchLimitPercentOfSalary ?? 0 }
 }
 
+/** A bonus is earned income, unlike a oneTimeCashFlow gift/windfall — it should
+ * flow through the same monthly pool as salary (so Policies can compete for it)
+ * rather than land straight in cash. Taxed at its own rate, not the household's
+ * flat taxRate: real supplemental-wage withholding differs from ordinary income. */
+export function netBonusIncomeAt(scenarioEvents: Event[], tick: YearMonth): number {
+  return scenarioEvents
+    .filter((event): event is Event & { effect: Extract<Event['effect'], { kind: 'bonusIncome' }> } => event.at === tick && event.effect.kind === 'bonusIncome')
+    .reduce((sum, event) => sum + event.effect.grossAmount * (1 - event.effect.taxRate), 0)
+}
+
 export function isPointEventActiveAt(event: Event, tick: YearMonth): boolean {
   return event.at === tick
 }
@@ -48,6 +58,12 @@ export function applyPointEvent(state: FinancialState, event: Event): FinancialS
   switch (effect.kind) {
     case 'employmentStart':
     case 'employmentEnd':
+      return state
+
+    // No direct effect here — netBonusIncomeAt scans events for this tick's
+    // bonusIncome directly, the same way activeAnnualSalaryAt does for salary,
+    // so calculate.ts can route it through the pool instead of straight to cash.
+    case 'bonusIncome':
       return state
 
     case 'oneTimeCashFlow': {
@@ -68,7 +84,8 @@ export function applyPointEvent(state: FinancialState, event: Event): FinancialS
       const property = state.assets.find((a) => a.id === effect.assetId)
       if (!property || property.assetType !== 'realEstate') return state
       const mortgage = state.liabilities.find((l) => l.linkedAssetId === effect.assetId)
-      const netProceeds = property.value - (mortgage?.balance ?? 0)
+      const fee = property.value * (effect.sellingFeeRate ?? 0)
+      const netProceeds = property.value - fee - (mortgage?.balance ?? 0)
       const cash = state.assets.find((asset) => asset.assetType === 'cash')
       const assets = state.assets
         .filter((a) => a.id !== effect.assetId)

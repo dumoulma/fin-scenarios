@@ -1,6 +1,6 @@
 import type { Asset, AssetType, HoldingContext, InitialState, Liability } from '../domain/types.ts'
 import { classify } from './mapping.ts'
-import type { KuberaItem, KuberaSnapshot } from './types.ts'
+import type { KuberaItem, KuberaSnapshot, MappingOverrides } from './types.ts'
 
 export type ImportSummary = {
   recognized: { source: string; mappedTo: string }[]
@@ -16,6 +16,30 @@ function slug(...parts: string[]): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
+}
+
+// Kubera returns geography.country as a lowercase full country name, not an ISO
+// code — confirmed against a live account ("usa", "canada"). This list covers only
+// what's actually been seen (plus "japan," inferred from the same naming
+// convention); an unlisted name surfaces for manual input rather than a guess.
+const KUBERA_COUNTRY_TO_ISO: Record<string, string> = { usa: 'US', canada: 'CA', japan: 'JP' }
+
+// Kubera reports geography.country as the literal string "others" for some
+// manually-entered/unlinked items (confirmed live: a Whole Life policy, a
+// mortgage, a directly-entered property) — it genuinely has no geo data for
+// them, so there's nothing generic to map. Resolving that is exactly what
+// MappingOverrides.country is for; this function has no hardcoded knowledge of
+// any specific account.
+function resolveCountry(item: KuberaItem, overrides: MappingOverrides = {}): { country: string } | { error: string } {
+  const overrideCountry = overrides[item.id]?.country
+  if (overrideCountry) return { country: overrideCountry }
+  const raw = item.geography?.country
+  if (raw) {
+    const iso = KUBERA_COUNTRY_TO_ISO[raw.toLowerCase()]
+    if (iso) return { country: iso }
+  }
+  if (!raw) return { error: 'missing country' }
+  return { error: `unrecognized country "${raw}"` }
 }
 
 type ResolvedValue = { amount: number; currency: string }
@@ -48,8 +72,17 @@ type RecognizedLiability = { item: KuberaItem; amount: number }
  * function's output is built entirely from existing domain types (InitialState,
  * Asset, Liability). Nothing downstream (the calculation engine, a Trajectory)
  * needs to know Kubera exists.
+ *
+ * `overrides` is the seam for correcting whatever the automatic classifier/
+ * geography lookup can't resolve on its own — supplied by a caller (eventually
+ * a "Connect Kubera" UI, where a person or an AI-assistant's first pass fills
+ * these in), never hardcoded here.
  */
-export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency: string = snapshot.baseCurrency): { initialState: InitialState; summary: ImportSummary } {
+export function importKuberaSnapshot(
+  snapshot: KuberaSnapshot,
+  overrides: MappingOverrides = {},
+  reportingCurrency: string = snapshot.baseCurrency,
+): { initialState: InitialState; summary: ImportSummary } {
   const recognizedSummary: ImportSummary['recognized'] = []
   const ignored: ImportSummary['ignored'] = []
   const needsManualInput: ImportSummary['needsManualInput'] = []
@@ -58,7 +91,7 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
   const recognizedLiabilities: RecognizedLiability[] = []
 
   for (const item of snapshot.items) {
-    const classification = classify(item)
+    const classification = classify(item, overrides)
 
     if (classification.outcome === 'ignored') {
       ignored.push({ source: item.name, reason: classification.reason })
@@ -81,13 +114,14 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
       unsupportedCurrency.push({ source: item.name, currency: resolved.currency })
       continue
     }
-    if (!item.country) {
-      needsManualInput.push({ source: item.name, reason: 'missing country' })
+    const resolvedCountry = resolveCountry(item, overrides)
+    if ('error' in resolvedCountry) {
+      needsManualInput.push({ source: item.name, reason: resolvedCountry.error })
       continue
     }
 
     if (classification.outcome === 'recognizedAsset') {
-      recognizedAssets.push({ item, assetType: classification.assetType, holdingContext: classification.holdingContext, amount: resolved.amount, country: item.country, currency: resolved.currency })
+      recognizedAssets.push({ item, assetType: classification.assetType, holdingContext: classification.holdingContext, amount: resolved.amount, country: resolvedCountry.country, currency: resolved.currency })
     } else {
       recognizedLiabilities.push({ item, amount: resolved.amount })
     }

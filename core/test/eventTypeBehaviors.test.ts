@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeAnnualSalaryAt, applyPointEvent, isPointEventActiveAt } from '../src/engine/eventTypeBehaviors.ts'
+import { activeAnnualSalaryAt, applyPointEvent, isPointEventActiveAt, netBonusIncomeAt } from '../src/engine/eventTypeBehaviors.ts'
 import type { Event, FinancialState } from '../src/domain/types.ts'
 
 describe('activeAnnualSalaryAt', () => {
@@ -34,6 +34,26 @@ describe('activeAnnualSalaryAt', () => {
   })
 })
 
+describe('netBonusIncomeAt', () => {
+  it('is 0 on a tick with no bonusIncome event', () => {
+    const events: Event[] = [{ id: 'e1', at: '2026-12', effect: { kind: 'bonusIncome', grossAmount: 27_000, taxRate: 0.34 } }]
+    expect(netBonusIncomeAt(events, '2026-11')).toBe(0)
+  })
+
+  it('nets out the event’s own tax rate, not the household flat rate', () => {
+    const events: Event[] = [{ id: 'e1', at: '2026-12', effect: { kind: 'bonusIncome', grossAmount: 27_000, taxRate: 0.34 } }]
+    expect(netBonusIncomeAt(events, '2026-12')).toBeCloseTo(27_000 * 0.66, 6)
+  })
+
+  it('sums more than one bonusIncome event landing on the same tick', () => {
+    const events: Event[] = [
+      { id: 'e1', at: '2026-12', effect: { kind: 'bonusIncome', grossAmount: 27_000, taxRate: 0.34 } },
+      { id: 'e2', at: '2026-12', effect: { kind: 'bonusIncome', grossAmount: 10_000, taxRate: 0.2 } },
+    ]
+    expect(netBonusIncomeAt(events, '2026-12')).toBeCloseTo(27_000 * 0.66 + 10_000 * 0.8, 6)
+  })
+})
+
 describe('isPointEventActiveAt', () => {
   it('is only active on its own exact tick', () => {
     const event: Event = { id: 'e', at: '2027-03', effect: { kind: 'oneTimeCashFlow', amount: 100 } }
@@ -63,6 +83,12 @@ describe('applyPointEvent', () => {
     expect(state.assets.find((a) => a.assetType === 'cash')!.value).toBe(700)
   })
 
+  it('bonusIncome does not transform state directly — it flows through the pool via netBonusIncomeAt instead', () => {
+    const state = baseState()
+    const after = applyPointEvent(state, { id: 'e', at: '2026-01', effect: { kind: 'bonusIncome', grossAmount: 27_000, taxRate: 0.34 } })
+    expect(after).toEqual(state)
+  })
+
   it('sellProperty removes the property and its linked mortgage, netting proceeds to cash', () => {
     const state: FinancialState = {
       asOf: '2026-01',
@@ -76,6 +102,22 @@ describe('applyPointEvent', () => {
     expect(after.assets.some((a) => a.id === 'home')).toBe(false)
     expect(after.liabilities).toHaveLength(0)
     expect(after.assets.find((a) => a.assetType === 'cash')!.value).toBe(300000)
+  })
+
+  it('sellProperty deducts a selling fee (rate of sale price) from proceeds before the mortgage payoff', () => {
+    const state: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 500000 },
+      ],
+      liabilities: [{ id: 'm', name: 'Mortgage', kind: 'mortgage', balance: 200000, linkedAssetId: 'home' }],
+    }
+    const after = applyPointEvent(state, { id: 'e', at: '2026-01', effect: { kind: 'sellProperty', assetId: 'home', sellingFeeRate: 0.06 } })
+    expect(after.assets.some((a) => a.id === 'home')).toBe(false)
+    expect(after.liabilities).toHaveLength(0)
+    // 500000 sale - 30000 fee (6%) - 200000 mortgage payoff = 270000 net proceeds
+    expect(after.assets.find((a) => a.assetType === 'cash')!.value).toBe(270000)
   })
 
   it('wholeLifePolicyLoan increases cash and the loan balance without reducing the policy value', () => {

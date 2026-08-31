@@ -99,6 +99,32 @@ describe('contributeToWholeLifePUA — pays surplus into Paid-Up Additions up to
   })
 })
 
+describe('contributeToWholeLifePUAAnnually — a sibling of contributeToWholeLifePUA that tracks a real annual cap instead of a monthly-equivalent slice', () => {
+  it('claims the whole pool in one month, up to the full annual cap — no monthly division', () => {
+    const state: FinancialState = { asOf: '2026-12', reportingCurrency: 'USD', assets: [{ id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }], liabilities: [] }
+    const params = getParam({ wholeLifePuaAnnualMax: 22_000, wholeLifePuaChargeRate: 0.1 })
+    const ctx = { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() }
+
+    const { pool, state: after } = reconcile(30_000, state, [{ id: 'p', kind: 'contributeToWholeLifePUAAnnually', priority: 1 }], params, ctx)
+
+    expect(pool).toBe(30_000 - 22_000) // claims the full annual cap in one shot, not 22,000/12
+    expect(after.assets[0]!.value).toBeCloseTo(100_000 + 22_000 * 0.9, 6)
+  })
+
+  it('stops once the annual cap is used up, even across multiple calls sharing the same ctx', () => {
+    const state: FinancialState = { asOf: '2026-04', reportingCurrency: 'USD', assets: [{ id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }], liabilities: [] }
+    const params = getParam({ wholeLifePuaAnnualMax: 22_000, wholeLifePuaChargeRate: 0.1 })
+    const ctx = { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() }
+    const policy = { id: 'p', kind: 'contributeToWholeLifePUAAnnually' as const, priority: 1 }
+
+    const first = reconcile(15_000, state, [policy], params, ctx)
+    expect(first.pool).toBe(0) // pool was under the remaining cap, claims it all
+
+    const second = reconcile(15_000, first.state, [policy], params, ctx)
+    expect(second.pool).toBe(15_000 - 7_000) // only 7,000 of annual room left
+  })
+})
+
 describe('netWorth — a policy loan is a real liability against the policy', () => {
   it('reduces net worth by the outstanding policy loan balance, even though the loan never touches cashValue', () => {
     const state: FinancialState = {
