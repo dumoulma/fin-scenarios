@@ -214,3 +214,104 @@ describe("capstone: Matt's real policy stack — premium, capped 401(k), two ind
     expect(netWorth(result.annual.at(-1)!)).toBeGreaterThan(netWorth(initialState))
   })
 })
+
+describe('gap: annual-cap Policies only ever reset every January, even for accounts with a real off-calendar anniversary', () => {
+  it("a contributeToWholeLifePUAAnnually policy with resetMonth: 4 tracks its cap against its own April-to-March policy year, not the calendar year", () => {
+    const wl: FinancialState['assets'][number] = { id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 }
+    const policies: Policy[] = [{ id: 'pua-annual', kind: 'contributeToWholeLifePUAAnnually', priority: 1, resetMonth: 4 }]
+    const trajectory = createTrajectory('Policy-year cap', [
+      scenario({
+        name: 'Two calendar years, one policy-year boundary',
+        start: '2026-01',
+        end: '2027-12',
+        events: [
+          // Uses most of the annual cap right before the calendar year turns over —
+          // if the cap incorrectly reset every January, the Feb claim below would
+          // wrongly see a fresh $22k of room instead of the ~$0 actually left in
+          // this policy year.
+          { id: 'evt-bonus-1', at: '2026-12', effect: { kind: 'bonusIncome', grossAmount: 27_000, taxRate: 0 } },
+          { id: 'evt-bonus-2', at: '2027-02', effect: { kind: 'bonusIncome', grossAmount: 10_000, taxRate: 0 } },
+          // Past the April anniversary — a fresh policy year, fresh room.
+          { id: 'evt-bonus-3', at: '2027-05', effect: { kind: 'bonusIncome', grossAmount: 10_000, taxRate: 0 } },
+        ],
+        parameters: { spending: 0, taxRate: 0, wholeLifePuaAnnualMax: 22_000, wholeLifePuaChargeRate: 0, wholeLifeCreditingRate: 0, wholeLifeDividendRate: 0, wholeLifePolicyFee: 0 },
+        policies,
+      }),
+    ])
+    const initialState: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [wl], liabilities: [] }
+
+    const result = calculate(initialState, trajectory)
+    const finalWl = result.monthly.at(-1)!.assets.find((a) => a.id === 'wl')!
+
+    // Dec 2026: claims the full $22k cap (of $27k available). Feb 2027: same
+    // policy year, only ~$0 of room left, claims nothing. May 2027: past the
+    // April anniversary, fresh $22k cap, claims the full $10k available.
+    expect(finalWl.value).toBeCloseTo(22_000 + 0 + 10_000, 6)
+  })
+})
+
+describe('gap: nothing sweeps cash sitting above its reserve target into investments', () => {
+  it('sweepCashAboveTarget moves the excess (a configurable fraction of it) from a source Asset to a target Asset, leaving the pool untouched', () => {
+    const state: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD',
+      assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 65_000 }, // $20k above target
+        { id: 'sp500', name: 'S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
+      ],
+      liabilities: [],
+    }
+    const policy: Policy = { id: 'sweep-sp500', kind: 'sweepCashAboveTarget', priority: 1, sourceAssetId: 'cash', targetAssetId: 'sp500' }
+    const getParam = (name: string) => (name === 'cashCashReserveTarget' ? 45_000 : name === 'sp500SweepFraction' ? 0.7 : 0)
+
+    const { pool, state: after } = reconcile(1_000, state, [policy], getParam, { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() })
+
+    // 70% of the $20k excess moves to sp500; the pool (unrelated new-money surplus) is untouched
+    expect(after.assets.find((a) => a.id === 'cash')!.value).toBeCloseTo(51_000, 6)
+    expect(after.assets.find((a) => a.id === 'sp500')!.value).toBeCloseTo(14_000, 6)
+    expect(pool).toBeCloseTo(1_000, 6)
+  })
+
+  it('two instances with fractions 0.7 and 1.0 split the excess 70/30 between two destinations', () => {
+    const state: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD',
+      assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 65_000 },
+        { id: 'sp500', name: 'S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
+        { id: 'intl', name: 'International ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
+      ],
+      liabilities: [],
+    }
+    const policies: Policy[] = [
+      { id: 'sweep-sp500', kind: 'sweepCashAboveTarget', priority: 1, sourceAssetId: 'cash', targetAssetId: 'sp500' },
+      { id: 'sweep-intl', kind: 'sweepCashAboveTarget', priority: 2, sourceAssetId: 'cash', targetAssetId: 'intl' },
+    ]
+    const getParam = (name: string) => (name === 'cashCashReserveTarget' ? 45_000 : name === 'sp500SweepFraction' ? 0.7 : name === 'intlSweepFraction' ? 1.0 : 0)
+
+    const { state: after } = reconcile(0, state, policies, getParam, { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() })
+
+    expect(after.assets.find((a) => a.id === 'cash')!.value).toBeCloseTo(45_000, 6)
+    expect(after.assets.find((a) => a.id === 'sp500')!.value).toBeCloseTo(14_000, 6) // 70% of the $20k excess
+    expect(after.assets.find((a) => a.id === 'intl')!.value).toBeCloseTo(6_000, 6) // 100% of what's left (30% of the original excess)
+  })
+
+  it('does nothing when cash is at or below its target', () => {
+    const state: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD',
+      assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 45_000 },
+        { id: 'sp500', name: 'S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
+      ],
+      liabilities: [],
+    }
+    const policy: Policy = { id: 'sweep-sp500', kind: 'sweepCashAboveTarget', priority: 1, sourceAssetId: 'cash', targetAssetId: 'sp500' }
+    const getParam = (name: string) => (name === 'cashCashReserveTarget' ? 45_000 : name === 'sp500SweepFraction' ? 0.7 : 0)
+
+    const { state: after } = reconcile(0, state, [policy], getParam, { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() })
+
+    expect(after.assets.find((a) => a.id === 'cash')!.value).toBeCloseTo(45_000, 6)
+    expect(after.assets.find((a) => a.id === 'sp500')!.value).toBeCloseTo(0, 6)
+  })
+})

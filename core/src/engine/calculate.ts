@@ -1,8 +1,8 @@
 import { addMonths, compareYearMonth, monthOf, yearOf, type YearMonth } from '../domain/dates.ts'
 import { assertFinancialStateCurrency, CurrencyInvariantError, type Asset, type CalculationResult, type FinancialState, type Scenario, type Trajectory } from '../domain/types.ts'
 import { applyAssetTypeBehavior, applyLiabilityBehavior, type GetParam } from './assetTypeBehaviors.ts'
-import { activeAnnualSalaryAt, activeEmploymentMatchAt, applyPointEvent, isPointEventActiveAt } from './eventTypeBehaviors.ts'
-import { reconcile } from './policies.ts'
+import { activeAnnualSalaryAt, activeEmploymentMatchAt, applyPointEvent, isPointEventActiveAt, netBonusIncomeAt } from './eventTypeBehaviors.ts'
+import { annualContributionsKeyFor, reconcile } from './policies.ts'
 import { determineSpending, type SpendingPolicyState } from './spendingPolicies.ts'
 
 export class TrajectoryInvariantError extends Error {}
@@ -90,11 +90,19 @@ export function calculate(
   let annualContributions = new Map<string, number>()
 
   while (compareYearMonth(tick, lastTick) <= 0) {
-    if (monthOf(tick) === 1) annualContributions = new Map()
-
     // 1. identify the Scenario covering this tick
     const scenario = scenarioForTick(trajectory, tick)
     const getParam: GetParam = (name) => inputs.parameterProvider(name, scenario, tick)
+
+    // Each annual-cap Policy resets its own slice of annualContributions on its
+    // own anniversary (Policy.resetMonth, default January) — a real account's cap
+    // doesn't necessarily reset on the calendar year (e.g. a Whole Life rider's
+    // policy-year cap resetting every April). Never a single blanket wipe: two
+    // Policies with different resetMonths must not clobber each other's totals.
+    for (const policy of scenario.policies) {
+      const key = annualContributionsKeyFor(policy)
+      if (key && monthOf(tick) === (policy.resetMonth ?? 1)) annualContributions.delete(key)
+    }
 
     // 2. this tick's point Events (buy/sell property, one-time cash flow, Whole
     // Life loan/withdrawal) apply unconditionally, before behavior/reconciliation
@@ -126,6 +134,11 @@ export function calculate(
     const { matchRate, matchLimitPercentOfSalary } = activeEmploymentMatchAt(scenario.events, tick)
     pool += grossIncome
     taxableCashFlow += grossIncome
+
+    // A bonusIncome event is already net of its own (possibly non-flat) tax rate —
+    // unlike salary, it doesn't run through taxableCashFlow/the household's flat
+    // taxRate below.
+    pool += netBonusIncomeAt(scenario.events, tick)
 
     // 6-7. Spending and tax are both applied before Policies reconcile what's left
     // — matches architecture.md's literal step order, and keeps "tax" a flat,

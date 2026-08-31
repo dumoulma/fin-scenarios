@@ -79,7 +79,15 @@ export function assertFinancialStateCurrency(state: FinancialState): void {
 export type EventEffect =
   | { kind: 'employmentStart'; annualSalary: number; matchRate?: number; matchLimitPercentOfSalary?: number }
   | { kind: 'employmentEnd' }
+  // Unconditional and untaxed — correct for a gift, inheritance, or other windfall
+  // that shouldn't compete with Policies for priority or be treated as earned
+  // income. See bonusIncome below for the earned-income counterpart.
   | { kind: 'oneTimeCashFlow'; amount: number } // + inflow, - outflow
+  // Earned income (a bonus), unlike oneTimeCashFlow: flows into the same monthly
+  // pool as salary so Policies can compete for it in priority order, taxed at its
+  // own rate rather than the household's flat taxRate — real supplemental-wage
+  // withholding differs from ordinary income tax.
+  | { kind: 'bonusIncome'; grossAmount: number; taxRate: number }
   | { kind: 'buyProperty'; asset: Asset; downPayment: number; transactionCost?: number; mortgage?: Liability }
   | { kind: 'sellProperty'; assetId: string; sellingFeeRate?: number }
   | { kind: 'wholeLifePolicyLoan'; assetId: string; amount: number }
@@ -112,6 +120,8 @@ export type PolicyKind =
   | 'fundDeficitFromFixedIncomeSale'
   | 'fundDeficitFromDebt'
   | 'contributeToWholeLifePUA'
+  | 'contributeToWholeLifePUAAnnually'
+  | 'sweepCashAboveTarget'
 
 // targetHoldingContext is what makes contributeUpToMatch/contributeUpToLimit generic:
 // the same policy kind serves a 401(k), a Roth 401(k), an IRA, or an HSA by aiming at
@@ -119,12 +129,21 @@ export type PolicyKind =
 // targetAssetId lets maintainCashReserve target one specific named cash Asset (e.g.
 // "keep $20k at Chase, independently of $25k at Wealthfront") instead of always the
 // first cash Asset found — absent, it falls back to that original behavior unchanged.
+// sourceAssetId is sweepCashAboveTarget's counterpart to targetAssetId: the Asset
+// being swept FROM (targetAssetId is swept TO).
+// resetMonth governs when a policy's own slice of ctx.annualContributions clears —
+// absent means January (calendar-year caps like 401(k)/IRA limits), but a real
+// account can run on its own anniversary (e.g. a Whole Life rider's policy-year
+// cap resetting every April) — each policy's own key resets independently, never
+// a single blanket wipe of every cap at once.
 export type Policy = {
   id: string
   kind: PolicyKind
   priority: number
   targetHoldingContext?: HoldingContext
   targetAssetId?: string
+  sourceAssetId?: string
+  resetMonth?: number
 }
 
 // --- Spending Policy ---
