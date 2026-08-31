@@ -3,6 +3,7 @@ import { assertFinancialStateCurrency, CurrencyInvariantError, type Asset, type 
 import { applyAssetTypeBehavior, applyLiabilityBehavior, type GetParam } from './assetTypeBehaviors.ts'
 import { activeAnnualSalaryAt, activeEmploymentMatchAt, applyPointEvent, isPointEventActiveAt } from './eventTypeBehaviors.ts'
 import { reconcile } from './policies.ts'
+import { determineSpending, type SpendingPolicyState } from './spendingPolicies.ts'
 
 export class TrajectoryInvariantError extends Error {}
 export { CurrencyInvariantError }
@@ -82,6 +83,7 @@ export function calculate(
   let state = initialState
   const lastTick = trajectory.scenarios.at(-1)!.end
   let tick = trajectory.scenarios[0]!.start
+  let spendingPolicyState: SpendingPolicyState = null
 
   while (compareYearMonth(tick, lastTick) <= 0) {
     // 1. identify the Scenario covering this tick
@@ -125,7 +127,8 @@ export function calculate(
     // taxable cash flow is taxed — a point Event (gift, inheritance) never touches
     // this at all, and a tax-advantaged container's distribution is excluded above.
     const tax = taxableCashFlow * getParam('taxRate')
-    const spending = getParam('spending')
+    const { amount: spending, nextState } = determineSpending(scenario, tick, state, getParam('spending'), spendingPolicyState)
+    spendingPolicyState = nextState
     pool -= spending + tax
 
     // 8. Policies reconcile the remaining pool in priority order.

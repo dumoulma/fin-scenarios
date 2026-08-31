@@ -52,7 +52,7 @@ export const initialStateArb: fc.Arbitrary<FinancialState> = fc.array(assetArb('
   liabilities: [],
 }))
 
-const policyKinds: Policy['kind'][] = ['maintainCashReserve', 'contributeUpToMatch', 'contributeUpToLimit', 'payMortgageExtra', 'investSurplus', 'fundDeficitFromCash', 'fundDeficitFromWholeLifeLoan', 'fundDeficitFromEquitySale', 'fundDeficitFromDebt', 'contributeToWholeLifePUA']
+const policyKinds: Policy['kind'][] = ['maintainCashReserve', 'contributeUpToMatch', 'contributeUpToLimit', 'payMortgageExtra', 'investSurplus', 'fundDeficitFromCash', 'fundDeficitFromWholeLifeLoan', 'fundDeficitFromEquitySale', 'fundDeficitFromFixedIncomeSale', 'fundDeficitFromDebt', 'contributeToWholeLifePUA']
 export const policiesArb: fc.Arbitrary<Policy[]> = fc.array(fc.record({
   kind: fc.constantFrom(...policyKinds), priority: fc.integer({ min: 1, max: 20 }), targetHoldingContext: fc.option(fc.constantFrom(...holdingContexts), { nil: undefined }),
 }), { maxLength: 5 }).map((policies) => policies.map((policy, index) => ({ ...policy, id: `policy-${index}` })))

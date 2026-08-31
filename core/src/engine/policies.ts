@@ -114,6 +114,19 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
     return { pool: pool + claim, state: { ...state, assets } }
   },
 
+  // Same shape as fundDeficitFromEquitySale, targeting fixedIncome instead — the
+  // "bonds" rung of a cash -> bonds -> equity retirement bucket strategy is just a
+  // matter of priority ordering these three, per docs/design/dynamic-spending.md.
+  fundDeficitFromFixedIncomeSale: (pool, state) => {
+    if (pool >= 0) return { pool, state }
+    const bonds = state.assets.find((a) => a.assetType === 'fixedIncome')
+    if (!bonds) return { pool, state }
+    const claim = Math.min(-pool, bonds.value)
+    if (claim <= 0) return { pool, state }
+    const assets = state.assets.map((a) => (a.id === bonds.id ? { ...a, value: a.value - claim } : a))
+    return { pool: pool + claim, state: { ...state, assets } }
+  },
+
   // Uncapped — debt can always cover the remainder. Reuses an existing 'other'
   // liability if one exists, otherwise opens one; a real product would let the
   // user name/rate this, but no test yet requires that.
