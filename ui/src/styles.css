@@ -51,14 +51,111 @@ body {
   padding: 2.5rem 1.5rem 4rem;
 }
 
-.app__header {
-  margin-bottom: 0.6rem;
+.trajectory-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
 }
 
-.app__header h1 {
-  font: 700 1.3rem/1.2 -apple-system, sans-serif;
-  margin: 0;
+.trajectory-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.trajectory-tab:hover {
+  background: var(--surface);
+}
+
+.trajectory-tab--active {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.trajectory-tab__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex: none;
+}
+
+.trajectory-tab__name {
+  font: 700 1.1rem -apple-system, sans-serif;
   letter-spacing: -0.01em;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 0.05rem 0.2rem;
+  max-width: 14rem;
+}
+
+.trajectory-tab--active .trajectory-tab__name {
+  cursor: text;
+}
+
+.trajectory-tab:not(.trajectory-tab--active) .trajectory-tab__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+  pointer-events: none;
+}
+
+.trajectory-tab__name:focus {
+  outline: none;
+  background: var(--bg);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.trajectory-tab__close {
+  border: none;
+  background: var(--line);
+  color: var(--ink-dim);
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dup-btn {
+  margin-left: auto;
+  font: 600 0.82rem -apple-system, sans-serif;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
+  cursor: pointer;
+}
+
+.dup-btn:hover {
+  filter: brightness(1.06);
+}
+
+.legend {
+  display: flex;
+  gap: 1.1rem;
+  font: 500 0.78rem -apple-system, sans-serif;
+  color: var(--ink-dim);
+  margin-bottom: 0.5rem;
+}
+
+.legend__swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
 }
 
 .badge {

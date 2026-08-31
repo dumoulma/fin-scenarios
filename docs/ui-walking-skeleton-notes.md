@@ -15,10 +15,22 @@ design in `docs/ui-design-guide.md` §5:
 - **Click "+" between two scenarios to insert one.** Calls the new `insertScenario`
   (added to `core/src/domain/trajectory.ts` for this) — no dialog, splits the
   neighbor's remaining duration in half immediately.
-- **Rename inline, delete inserted scenarios.**
+- **Rename inline, delete inserted scenarios.** Delete calls the new `deleteScenario`
+  (also added to `core/`) — the inverse of `insertScenario`: the freed duration goes
+  back to the following Scenario, keeping the trajectory's total length fixed. This
+  is deliberately *not* the same as the pre-existing `removeScenario`, which cascades
+  every later Scenario earlier and shrinks the trajectory instead — that's a real,
+  different, already-tested operation, just not the one this interaction model needs.
 - **Click the chart to inspect any point in time** — the summary strip below shows
   net worth, month, and change-from-start for whatever's selected; defaults to the
   end of the trajectory.
+- **Duplicate a Trajectory into an Alternative and compare.** Uses the existing
+  `duplicateTrajectory` plus the domain's `Workspace` shape (`master` +
+  `alternatives`). Tabs above the timeline switch which Trajectory is being edited;
+  the chart always plots every Trajectory in the Workspace at once (Master solid,
+  Alternatives dashed in distinct colors), matching docs/ui-design-guide.md §16 —
+  "no separate comparison calculator," just the same `calculate()` run once per
+  Trajectory. Editing one Trajectory never touches another's data.
 
 There is no backend: `core/`'s engine is plain TypeScript with no Node-only APIs, so
 it's imported straight into the Vite/React app via a `@core` path alias
@@ -26,19 +38,16 @@ it's imported straight into the Vite/React app via a `@core` path alias
 against the real domain objects — nothing in this app is illustrative/mocked, unlike
 the earlier design sketches.
 
-## What was deliberately left out of this first pass
+## What was deliberately left out
 
-- **Duplicate Trajectory / compare view.** The design guide treats this as the whole
-  point of the product, but today's work specifically validated the timeline-editing
-  interactions (resize/insert/inspect) — adding compare is a natural, contained next
-  step, not included here to keep this pass focused.
 - **Events/Policies editing UI.** Scenarios use whatever parameters/policies the
   quiet-millionaire trajectory (or an inserted scenario's copied neighbor) already
   has; there's no form to edit them yet.
-- **Master/Alternative promotion, Kubera import flow.** Out of scope for a walking
-  skeleton; both already exist at the domain/adapter level in `core/`.
+- **Promoting an Alternative to Master, Kubera import flow.** Out of scope for a
+  walking skeleton; both already exist at the domain/adapter level in `core/`
+  (`promoteToMaster`, the Kubera importer) — just not wired into this UI yet.
 
-## One real bug found while verifying this (via `ui/verify.mjs`, a Playwright smoke test)
+## Bugs found while verifying this (via `ui/verify.mjs`, a Playwright smoke test)
 
 The resize handle initially did nothing when dragged. Root cause: the handle was
 rendered as a child of its scenario's own `.block`, but the *next* block (later in
@@ -52,6 +61,15 @@ A second, related issue: the insert "+" button sat vertically centered on the sa
 boundary as the resize handle, so dragging from dead-center hit insert instead of
 resize. Fixed by moving the insert button above the timeline strip instead of
 overlapping it — the two affordances no longer compete for the same pixels.
+
+A third issue, caught by the delete step of the same smoke test: deleting a scenario
+made the *whole trajectory* two years shorter instead of just closing the gap
+locally. The delete handler was calling `removeScenario`, whose real (already-tested)
+semantic is to cascade every later Scenario earlier, preserving each one's own
+duration but shrinking the total — the opposite of the boundary-drag model resize
+and insert both use. Fixed by adding `deleteScenario`, the actual inverse of
+`insertScenario`: the freed time goes to the following Scenario instead of vanishing
+from the total.
 
 ## Known rough edge
 

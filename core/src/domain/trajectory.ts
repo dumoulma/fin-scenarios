@@ -188,6 +188,33 @@ export function insertScenario(trajectory: Trajectory, afterScenarioId: string, 
   return { ...trajectory, scenarios }
 }
 
+/**
+ * Boundary-drag delete, the inverse of insertScenario: the freed duration goes to
+ * the following Scenario (whose start moves back to absorb it, end unchanged), or
+ * to the preceding one if there is no successor. The Trajectory's total length and
+ * every other Scenario stay fixed — unlike removeScenario, which closes the gap by
+ * cascading every later Scenario's placement instead of extending a neighbor.
+ */
+export function deleteScenario(trajectory: Trajectory, scenarioId: string): Trajectory {
+  if (trajectory.scenarios.length <= 1) {
+    throw new TrajectoryInvariantError('Cannot remove the last Scenario from a Trajectory')
+  }
+  const index = findIndexOrThrow(trajectory, scenarioId)
+  const removed = trajectory.scenarios[index]!
+  const scenarios = trajectory.scenarios.filter((s) => s.id !== scenarioId)
+
+  const next = trajectory.scenarios[index + 1]
+  if (next) {
+    scenarios[index] = { ...next, start: removed.start }
+  } else {
+    const previous = scenarios[index - 1]!
+    scenarios[index - 1] = { ...previous, end: removed.end }
+  }
+
+  validateTrajectory(scenarios)
+  return { ...trajectory, scenarios }
+}
+
 export function duplicateTrajectory(trajectory: Trajectory, newName: string): Trajectory {
   return { id: randomId(), name: newName, scenarios: trajectory.scenarios }
 }
