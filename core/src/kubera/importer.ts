@@ -18,6 +18,36 @@ function slug(...parts: string[]): string {
     .replace(/(^-|-$)/g, '')
 }
 
+// Kubera returns geography.country as a lowercase full country name, not an ISO
+// code — confirmed against a live account ("usa", "canada"). This list covers only
+// what's actually been seen (plus "japan," inferred from the same naming
+// convention); an unlisted name surfaces for manual input rather than a guess.
+const KUBERA_COUNTRY_TO_ISO: Record<string, string> = { usa: 'US', canada: 'CA', japan: 'JP' }
+
+// Kubera reports geography.country as the literal string "others" for some
+// manually-entered/unlinked items (confirmed live: a Whole Life policy, a
+// mortgage, a directly-entered property) — it genuinely has no geo data for
+// them, so there's nothing generic to map. These specific, named accounts are
+// confirmed real and US-based; this is a targeted fix for known accounts (the
+// same shape as mapping.ts's KNOWN_401K_PROVIDER_PATTERN), not a rule that
+// assumes "others" means US in general — an unnamed "others" item still
+// correctly surfaces for manual input below. `/^mortgage$/i` is intentionally
+// bare (Kubera's real mortgage liability here has no more specific name) —
+// this only makes sense for a personal deployment modeling one known
+// portfolio; a shared/multi-tenant version would need a less generic anchor.
+const KNOWN_US_ACCOUNTS_WITHOUT_GEOGRAPHY = [/guardian/i, /530 gregory/i, /^mortgage$/i]
+
+function resolveCountry(item: KuberaItem): { country: string } | { error: string } {
+  const raw = item.geography?.country
+  if (raw) {
+    const iso = KUBERA_COUNTRY_TO_ISO[raw.toLowerCase()]
+    if (iso) return { country: iso }
+  }
+  if (KNOWN_US_ACCOUNTS_WITHOUT_GEOGRAPHY.some((pattern) => pattern.test(item.name))) return { country: 'US' }
+  if (!raw) return { error: 'missing country' }
+  return { error: `unrecognized country "${raw}"` }
+}
+
 type ResolvedValue = { amount: number; currency: string }
 
 function resolveValue(item: KuberaItem, baseCurrency: string): ResolvedValue | { error: string } {
@@ -81,13 +111,14 @@ export function importKuberaSnapshot(snapshot: KuberaSnapshot, reportingCurrency
       unsupportedCurrency.push({ source: item.name, currency: resolved.currency })
       continue
     }
-    if (!item.country) {
-      needsManualInput.push({ source: item.name, reason: 'missing country' })
+    const resolvedCountry = resolveCountry(item)
+    if ('error' in resolvedCountry) {
+      needsManualInput.push({ source: item.name, reason: resolvedCountry.error })
       continue
     }
 
     if (classification.outcome === 'recognizedAsset') {
-      recognizedAssets.push({ item, assetType: classification.assetType, holdingContext: classification.holdingContext, amount: resolved.amount, country: item.country, currency: resolved.currency })
+      recognizedAssets.push({ item, assetType: classification.assetType, holdingContext: classification.holdingContext, amount: resolved.amount, country: resolvedCountry.country, currency: resolved.currency })
     } else {
       recognizedLiabilities.push({ item, amount: resolved.amount })
     }

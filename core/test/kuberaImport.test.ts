@@ -14,11 +14,49 @@ function snapshotOf(items: KuberaSnapshot['items']): KuberaSnapshot {
 describe('1. a simple Kubera asset becomes one Asset Position', () => {
   it('imports a single cash item as one Asset with the right Asset Type and value', () => {
     const snapshot = snapshotOf([
-      { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', country: 'US', subType: 'cash', value: { amount: 1200, currency: 'USD' } },
+      { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', geography: { country: 'usa', region: 'other' }, subType: 'cash', value: { amount: 1200, currency: 'USD' } },
     ])
     const { initialState } = importKuberaSnapshot(snapshot)
     expect(initialState.assets).toHaveLength(1)
     expect(initialState.assets[0]).toMatchObject({ assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 1200 })
+  })
+
+  it('reads country from the real nested geography.country field, converting Kubera\'s lowercase country name to an ISO 3166-1 alpha-2 code', () => {
+    const snapshot = snapshotOf([
+      { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', geography: { country: 'canada', region: 'other' }, subType: 'cash', value: { amount: 500, currency: 'CAD' } },
+    ])
+    const { initialState } = importKuberaSnapshot(snapshot, 'CAD')
+    expect(initialState.assets[0]!.country).toBe('CA')
+  })
+
+  it('surfaces an unrecognized country name for manual input rather than guessing', () => {
+    const snapshot = snapshotOf([
+      { id: 'a1', name: 'Checking', sectionName: 'Bank', sheetName: 'Cash', category: 'asset', geography: { country: 'atlantis', region: 'other' }, subType: 'cash', value: { amount: 500, currency: 'USD' } },
+    ])
+    const { initialState, summary } = importKuberaSnapshot(snapshot)
+    expect(initialState.assets).toHaveLength(0)
+    expect(summary.needsManualInput).toContainEqual({ source: 'Checking', reason: 'unrecognized country "atlantis"' })
+  })
+
+  it('resolves country for known real accounts Kubera reports as "others" — a targeted fix for a specific confirmed account, not a general guess', () => {
+    const snapshot = snapshotOf([
+      { id: 'a1', name: 'Guardian Life - Whole Life 95 (Cash Value)', sectionName: 'USA', sheetName: 'Retirement Investments', category: 'asset', subType: 'other', geography: { country: 'others', region: 'other' }, value: { amount: 10_000, currency: 'USD' } },
+      { id: 'a2', name: '530 Gregory Ave c311', sectionName: 'Section 1', sheetName: 'Real Estate', category: 'asset', subType: 'primary residence', geography: { country: 'others', region: 'other' }, value: { amount: 500_000, currency: 'USD' } },
+      { id: 'd1', name: 'Mortgage', sectionName: 'Section 1', sheetName: 'Loans', category: 'debt', geography: { country: 'others', region: 'other' }, value: { amount: 300_000, currency: 'USD' } },
+    ])
+    const { initialState, summary } = importKuberaSnapshot(snapshot)
+    expect(summary.needsManualInput).toEqual([])
+    expect(initialState.assets.find((a) => a.assetType === 'wholeLifeInsurance')!.country).toBe('US')
+    expect(initialState.assets.find((a) => a.assetType === 'realEstate')!.country).toBe('US')
+    expect(initialState.liabilities).toHaveLength(1)
+  })
+
+  it('still surfaces an unnamed item with country "others" for manual input — the override is per known account, not blanket for "others"', () => {
+    const snapshot = snapshotOf([
+      { id: 'a1', name: 'Some Unrelated Manual Entry', sectionName: 'USA', sheetName: 'Cash', category: 'asset', subType: 'cash', geography: { country: 'others', region: 'other' }, value: { amount: 100, currency: 'USD' } },
+    ])
+    const { summary } = importKuberaSnapshot(snapshot)
+    expect(summary.needsManualInput).toContainEqual({ source: 'Some Unrelated Manual Entry', reason: 'unrecognized country "others"' })
   })
 })
 
@@ -68,7 +106,7 @@ describe('4. a retirement account maps to the correct Holding Context', () => {
           sectionName: 'USA',
           sheetName: 'Retirement Investments',
           category: 'asset',
-          country: 'US',
+          geography: { country: 'usa', region: 'other' },
           subType: 'investment',
           value: { amount: 12_000, currency: 'USD' },
         },

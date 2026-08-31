@@ -1,6 +1,8 @@
-// Shape confirmed against the live Kubera Data API v3 (`GET /portfolio/<id>`) during
-// prototypes/01-kubera-import, trimmed to the fields this importer actually reads.
-// Real items carry many more fields (connection, geography, cagr, ...) we ignore.
+// Shape confirmed against the live Kubera Data API v3 (`GET /portfolio/<id>`),
+// trimmed to the fields this importer actually reads. Real items carry many more
+// fields (connection, cagr, ticker, ...) we ignore. `geography` was re-confirmed
+// against a real live account: country is nested here, not a top-level field, and
+// comes back as a lowercase full country name ("usa", "canada"), not an ISO code.
 
 export type KuberaMoney = { amount: number; currency: string } | { amount: number } | null
 
@@ -13,8 +15,7 @@ export type KuberaItem = {
   sheetName: string
   category: KuberaItemCategory
   value: KuberaMoney
-  /** Country supplied by Kubera for this holding; absent values need manual input. */
-  country?: string
+  geography?: { country: string; region: string }
   subType?: string
   assetClass?: string
   /**

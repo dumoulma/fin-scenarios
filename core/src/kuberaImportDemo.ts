@@ -28,7 +28,7 @@ async function loadSnapshot() {
   const portfolios = await listPortfolios(credentials)
   const portfolio = portfolios[0]
   if (!portfolio) throw new Error('No Kubera portfolios found for this account')
-  return getPortfolioData(credentials, portfolio.id)
+  return getPortfolioData(credentials, portfolio.id, portfolio.currency)
 }
 
 const snapshot = await loadSnapshot()
