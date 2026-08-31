@@ -22,8 +22,8 @@ const assetTypeBehaviors: Record<AssetType, (asset: Asset, tick: YearMonth, getP
   cash: (asset, _tick, getParam) => ({ asset: { ...asset, value: asset.value * (1 + getParam('cashApy') / 12) }, cashFlow: 0 }),
   fixedIncome: (asset, _tick, getParam) => ({ asset: { ...asset, value: asset.value * (1 + getParam('fixedIncomeReturn') / 12) }, cashFlow: 0 }),
   equity: (asset, _tick, getParam) => {
-    const growthRate = asset.growthRate ?? getParam('equityReturn')
-    const distributionRate = asset.distributionRate ?? getParam('equityDistributionRate')
+    const growthRate = asset.growthRateParameter ? getParam(asset.growthRateParameter) : (asset.growthRate ?? getParam('equityReturn'))
+    const distributionRate = asset.distributionRateParameter ? getParam(asset.distributionRateParameter) : (asset.distributionRate ?? getParam('equityDistributionRate'))
     const grown = asset.value * (1 + growthRate / 12)
     const distribution = asset.value * (distributionRate / 12)
     return { asset: { ...asset, value: grown }, cashFlow: distribution }

@@ -21,6 +21,35 @@ describe('applyAssetTypeBehavior', () => {
     expect(applyAssetTypeBehavior(brokerageEquity, '2026-01', params).asset.value).toBeCloseTo(applyAssetTypeBehavior(retirementEquity, '2026-01', params).asset.value, 6)
   })
 
+  it('growthRateParameter reads a named Scenario Parameter instead of the shared equityReturn default — this is what lets a Monte Carlo Input Generator randomize an otherwise-fixed-override Asset', () => {
+    const withLiteralOverride: Asset = { id: 'e1', name: 'Fixed 5%', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 100000, growthRate: 0.05 }
+    const withNamedParameter: Asset = { id: 'e2', name: 'Named param', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 100000, growthRateParameter: 'sp500EtfReturn' }
+    const params = getParam({ equityReturn: 0.07, sp500EtfReturn: 0.05 })
+
+    // Same numeric result whether the 5% comes from a literal override or a
+    // named parameter that happens to also be 5% right now...
+    expect(applyAssetTypeBehavior(withNamedParameter, '2026-01', params).asset.value).toBeCloseTo(applyAssetTypeBehavior(withLiteralOverride, '2026-01', params).asset.value, 6)
+
+    // ...but only the named-parameter version actually reacts when that
+    // parameter changes (e.g. a fresh stochastic draw each tick) — the literal
+    // override never does, by definition.
+    const stochasticParams = getParam({ equityReturn: 0.07, sp500EtfReturn: 0.30 })
+    expect(applyAssetTypeBehavior(withNamedParameter, '2026-01', stochasticParams).asset.value).toBeCloseTo(100000 * (1 + 0.3 / 12), 6)
+    expect(applyAssetTypeBehavior(withLiteralOverride, '2026-01', stochasticParams).asset.value).toBeCloseTo(100000 * (1 + 0.05 / 12), 6)
+  })
+
+  it('growthRateParameter takes priority over a literal growthRate if both are somehow set', () => {
+    const asset: Asset = { id: 'e', name: 'Both set', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100000, growthRate: 0.05, growthRateParameter: 'customReturn' }
+    const result = applyAssetTypeBehavior(asset, '2026-01', getParam({ equityReturn: 0.07, customReturn: 0.2 }))
+    expect(result.asset.value).toBeCloseTo(100000 * (1 + 0.2 / 12), 6)
+  })
+
+  it('distributionRateParameter works the same way for the distribution cash flow', () => {
+    const asset: Asset = { id: 'e', name: 'Named distribution', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100000, distributionRateParameter: 'intlEtfDistribution' }
+    const result = applyAssetTypeBehavior(asset, '2026-01', getParam({ equityReturn: 0, equityDistributionRate: 0.015, intlEtfDistribution: 0.04 }))
+    expect(result.cashFlow).toBeCloseTo((100000 * 0.04) / 12, 6)
+  })
+
   it('produces a distribution cash flow separate from (and not reducing) the equity value', () => {
     const equity: Asset = { id: 'e', name: 'Equity', assetType: 'equity', holdingContext: 'none', country: 'US', currency: 'USD', value: 100000 }
     const result = applyAssetTypeBehavior(equity, '2026-01', getParam({ equityReturn: 0, equityDistributionRate: 0.04 }))
