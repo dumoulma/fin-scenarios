@@ -86,6 +86,29 @@ describe('gap: no policy moves a fixed dollar amount regardless of surplus', () 
     expect(after.assets[0]!.value).toBeCloseTo(400, 6)
     expect(pool).toBeCloseTo(0, 6)
   })
+
+  it('with targetAssetId, two Assets sharing one holdingContext are each independently funded by their own Policy instance', () => {
+    const state: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD',
+      assets: [
+        { id: 'sp500', name: 'S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
+        { id: 'intl', name: 'International ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: 0 },
+      ],
+      liabilities: [],
+    }
+    const policies: Policy[] = [
+      { id: 'sp500-dca', kind: 'contributeFixedAmount', priority: 1, targetAssetId: 'sp500' },
+      { id: 'intl-dca', kind: 'contributeFixedAmount', priority: 2, targetAssetId: 'intl' },
+    ]
+    const getParam = (name: string) => (name === 'sp500FixedMonthlyAmount' ? 700 : name === 'intlFixedMonthlyAmount' ? 300 : 0)
+
+    const { pool, state: after } = reconcile(1_000, state, policies, getParam, { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() })
+
+    expect(after.assets.find((a) => a.id === 'sp500')!.value).toBeCloseTo(700, 6)
+    expect(after.assets.find((a) => a.id === 'intl')!.value).toBeCloseTo(300, 6)
+    expect(pool).toBeCloseTo(0, 6)
+  })
 })
 
 describe('gap: contributions toward the same annual limit from different Policies do not share a running total', () => {

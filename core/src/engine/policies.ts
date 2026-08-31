@@ -80,18 +80,25 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
   // more surplus this month. Shares the same calendar-year running total as
   // contributeUpToLimit when both target the same account, via the same
   // `${targetHoldingContext}AnnualLimit` (absent means no annual cap applies here).
+  //
+  // targetAssetId points this at one specific named Asset (e.g. a single ETF) with
+  // its own param key, mirroring maintainCashReserve's pattern — this is what lets
+  // two Assets sharing a holdingContext (e.g. two ETFs both in taxableBrokerage)
+  // each get their own independent fixed monthly contribution. Without it, falls
+  // back unchanged to the original holding-context-keyed behavior.
   contributeFixedAmount: (pool, state, getParam, ctx, policy) => {
-    if (pool <= 0 || !policy.targetHoldingContext) return { pool, state }
-    const account = state.assets.find((a) => a.holdingContext === policy.targetHoldingContext)
+    if (pool <= 0 || (!policy.targetHoldingContext && !policy.targetAssetId)) return { pool, state }
+    const account = policy.targetAssetId ? state.assets.find((a) => a.id === policy.targetAssetId) : state.assets.find((a) => a.holdingContext === policy.targetHoldingContext)
     if (!account) return { pool, state }
-    const fixedAmount = getParam(`${policy.targetHoldingContext}FixedMonthlyAmount`)
-    const annualLimit = getParam(`${policy.targetHoldingContext}AnnualLimit`)
-    const alreadyContributed = ctx.annualContributions.get(policy.targetHoldingContext) ?? 0
+    const key = policy.targetAssetId ?? policy.targetHoldingContext!
+    const fixedAmount = getParam(`${key}FixedMonthlyAmount`)
+    const annualLimit = getParam(`${key}AnnualLimit`)
+    const alreadyContributed = ctx.annualContributions.get(key) ?? 0
     const remainingCap = annualLimit > 0 ? Math.max(0, annualLimit - alreadyContributed) : Infinity
     const claim = Math.min(pool, fixedAmount, remainingCap)
     if (claim <= 0) return { pool, state }
     const assets = state.assets.map((a) => (a.id === account.id ? { ...a, value: a.value + claim } : a))
-    ctx.annualContributions.set(policy.targetHoldingContext, alreadyContributed + claim)
+    ctx.annualContributions.set(key, alreadyContributed + claim)
     return { pool: pool - claim, state: { ...state, assets } }
   },
 
