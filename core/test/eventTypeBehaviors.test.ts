@@ -78,6 +78,22 @@ describe('applyPointEvent', () => {
     expect(after.assets.find((a) => a.assetType === 'cash')!.value).toBe(300000)
   })
 
+  it('sellProperty deducts a selling fee (rate of sale price) from proceeds before the mortgage payoff', () => {
+    const state: FinancialState = {
+      asOf: '2026-01',
+      reportingCurrency: 'USD', assets: [
+        { id: 'cash', name: 'Cash', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 0 },
+        { id: 'home', name: 'Home', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 500000 },
+      ],
+      liabilities: [{ id: 'm', name: 'Mortgage', kind: 'mortgage', balance: 200000, linkedAssetId: 'home' }],
+    }
+    const after = applyPointEvent(state, { id: 'e', at: '2026-01', effect: { kind: 'sellProperty', assetId: 'home', sellingFeeRate: 0.06 } })
+    expect(after.assets.some((a) => a.id === 'home')).toBe(false)
+    expect(after.liabilities).toHaveLength(0)
+    // 500000 sale - 30000 fee (6%) - 200000 mortgage payoff = 270000 net proceeds
+    expect(after.assets.find((a) => a.assetType === 'cash')!.value).toBe(270000)
+  })
+
   it('wholeLifePolicyLoan increases cash and the loan balance without reducing the policy value', () => {
     const state: FinancialState = {
       asOf: '2026-01',

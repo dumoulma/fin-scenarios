@@ -81,7 +81,7 @@ export type EventEffect =
   | { kind: 'employmentEnd' }
   | { kind: 'oneTimeCashFlow'; amount: number } // + inflow, - outflow
   | { kind: 'buyProperty'; asset: Asset; downPayment: number; transactionCost?: number; mortgage?: Liability }
-  | { kind: 'sellProperty'; assetId: string }
+  | { kind: 'sellProperty'; assetId: string; sellingFeeRate?: number }
   | { kind: 'wholeLifePolicyLoan'; assetId: string; amount: number }
   | { kind: 'wholeLifeWithdrawal'; assetId: string; amount: number }
 

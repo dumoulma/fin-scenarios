@@ -68,7 +68,8 @@ export function applyPointEvent(state: FinancialState, event: Event): FinancialS
       const property = state.assets.find((a) => a.id === effect.assetId)
       if (!property || property.assetType !== 'realEstate') return state
       const mortgage = state.liabilities.find((l) => l.linkedAssetId === effect.assetId)
-      const netProceeds = property.value - (mortgage?.balance ?? 0)
+      const fee = property.value * (effect.sellingFeeRate ?? 0)
+      const netProceeds = property.value - fee - (mortgage?.balance ?? 0)
       const cash = state.assets.find((asset) => asset.assetType === 'cash')
       const assets = state.assets
         .filter((a) => a.id !== effect.assetId)
