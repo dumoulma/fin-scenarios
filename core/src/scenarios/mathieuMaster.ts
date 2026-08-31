@@ -13,6 +13,7 @@ import type { FinancialState, Policy } from '../domain/types.ts'
 const CASH_ID = 'cash'
 const SP500_ETF_ID = 'sp500Etf'
 const INTL_ETF_ID = 'intlEtf'
+const GUIDELINE_401K_ID = 'guideline-401k'
 const CONDO_ID = 'condo'
 const GUARDIAN_WL_ID = 'guardian-wl'
 
@@ -46,12 +47,17 @@ export const initialState: FinancialState = {
     { id: CASH_ID, name: 'Cash (Chase + Wealthfront)', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 38_694.22 },
     // Listed before intlEtf so investSurplus's first-match-by-holdingContext lands
     // the "everything left over" catch-all here (task item 6's unspecified default).
-    { id: SP500_ETF_ID, name: 'Schwab — S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.7, growthRate: 0.05, distributionRate: 0.015 },
-    { id: INTL_ETF_ID, name: 'Schwab — International ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.3, growthRate: 0.05, distributionRate: 0.025 },
+    // growthRateParameter/distributionRateParameter (not a literal growthRate) so
+    // a Monte Carlo stochastic Input Generator can actually randomize these —
+    // a literal override is a fixed number forever, which silently defeated
+    // Monte Carlo volatility on equityReturn until this was caught running MC
+    // against this real scenario. See runStochasticMonteCarlo's volatility config.
+    { id: SP500_ETF_ID, name: 'Schwab — S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.7, growthRateParameter: `${SP500_ETF_ID}Return`, distributionRateParameter: `${SP500_ETF_ID}Distribution` },
+    { id: INTL_ETF_ID, name: 'Schwab — International ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.3, growthRateParameter: `${INTL_ETF_ID}Return`, distributionRateParameter: `${INTL_ETF_ID}Distribution` },
     // Assumed invested 70/30 US/international, same as the taxable Schwab account —
     // real growth rates are equal (5%/5%) so the blend is just 0.05; only the
     // distribution yield actually changes with the mix (0.7*1.5% + 0.3*2.5%).
-    { id: 'guideline-401k', name: 'Gusto/Guideline 401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 49_939.48, growthRate: 0.05, distributionRate: 0.018 },
+    { id: GUIDELINE_401K_ID, name: 'Gusto/Guideline 401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 49_939.48, growthRateParameter: `${GUIDELINE_401K_ID}Return`, distributionRateParameter: `${GUIDELINE_401K_ID}Distribution` },
     // Modeled as fixed income (bonds), not equity — per Mathieu, at a generous 1%
     // real return. fixedIncome's asset-type behavior has no per-asset growthRate
     // override (only equity does), so this rate is set via the scenario-level
@@ -131,8 +137,17 @@ const sharedParameters = {
   spending: 7_000,
   taxRate: 0.32,
   cashApy: 0.02, // per Mathieu: blended real rate of the combined Chase + Wealthfront balance
-  equityReturn: 0.07, // unused by any Asset here (every equity Asset now has its own growthRate/distributionRate) — kept as a domain-required fallback
+  equityReturn: 0.07, // unused by any Asset here (every equity Asset now has its own growthRateParameter) — kept as a domain-required fallback
   equityDistributionRate: 0.015,
+  // Named per-asset parameters, not a literal growthRate/distributionRate — see
+  // the comment on the Asset definitions above for why. Same real values as
+  // before this change; only the mechanism by which they reach the Asset changed.
+  [`${SP500_ETF_ID}Return`]: 0.05,
+  [`${SP500_ETF_ID}Distribution`]: 0.015,
+  [`${INTL_ETF_ID}Return`]: 0.05,
+  [`${INTL_ETF_ID}Distribution`]: 0.025,
+  [`${GUIDELINE_401K_ID}Return`]: 0.05,
+  [`${GUIDELINE_401K_ID}Distribution`]: 0.018,
   fixedIncomeReturn: 0.01, // per Mathieu: Roth IRA as bonds, "1% real (generous?)"
   propertyAppreciation: 0.03,
   // Whole Life: real crediting/dividend rates aren't in the illustration's
