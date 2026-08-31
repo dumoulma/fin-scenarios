@@ -86,7 +86,9 @@ const ANNUAL_BONUS_GROSS = 27_000
 // income tax (this household's flat 32%) — per Mathieu, 34%.
 const BONUS_TAX_RATE = 0.34
 const START = '2026-09'
-const END = '2036-08' // 120 months — exactly 10 years from the import date
+const WORKING_END = '2036-07' // last month before the condo sale
+const SALE_MONTH = '2036-08' // 120th month — exactly 10 years from the import date
+const POST_SALE_CASH_TARGET = 500_000 // per Mathieu: keep $500k of the sale proceeds liquid, not swept into the ETFs
 
 const policies: Policy[] = [
   { id: 'pol-401k-max', kind: 'contributeUpToLimit', priority: 1, targetHoldingContext: 'traditionalRetirement' },
@@ -119,40 +121,58 @@ function decemberBonusEvents(): { id: string; at: `${number}-${string}`; effect:
   return events
 }
 
+// Shared by both Scenarios below — only cashCashReserveTarget differs (see
+// POST_SALE_CASH_TARGET), which is why the sale gets its own one-month Scenario
+// rather than a mid-Scenario event: a Scenario Parameter is constant for the
+// Scenario it belongs to, so "the reserve target jumps once the condo sells" has
+// to be a Scenario boundary, the same mechanism quietMillionaire.ts already uses
+// for its once-every-5-years raises.
+const sharedParameters = {
+  spending: 7_000,
+  taxRate: 0.32,
+  cashApy: 0.02, // per Mathieu: blended real rate of the combined Chase + Wealthfront balance
+  equityReturn: 0.07, // unused by any Asset here (every equity Asset now has its own growthRate/distributionRate) — kept as a domain-required fallback
+  equityDistributionRate: 0.015,
+  fixedIncomeReturn: 0.01, // per Mathieu: Roth IRA as bonds, "1% real (generous?)"
+  propertyAppreciation: 0.03,
+  // Whole Life: real crediting/dividend rates aren't in the illustration's
+  // narrative summary (only the resulting cash-value schedule is), so these are
+  // conventional participating-WL placeholders, same as prior sessions' tests.
+  wholeLifeCreditingRate: 0.04,
+  wholeLifeDividendRate: 0.015,
+  wholeLifePolicyFee: 0, // real premium is modeled via Asset.premiumAmount above; no separate admin fee figure is known
+  wholeLifeLoanRate: 0.05, // real fixed rate per the illustration; unused (no loan events in this Scenario)
+  wholeLifePuaAnnualMax: 22_000, // per Mathieu: "about 22k for these years (just below MEC limit)" — the illustration's actual unscheduled-PUA cap varies ~$21.5k-$23.2k year to year; held flat here
+  wholeLifePuaChargeRate: 0.10, // per Mathieu: "PUA fee is 10%, so 90% goes to cash value"
+  traditionalRetirementAnnualLimit: 24_500, // approximate 2026 IRS 401(k) employee deferral limit — verify before relying on this figure
+  [`${SP500_ETF_ID}FixedMonthlyAmount`]: 700,
+  [`${INTL_ETF_ID}FixedMonthlyAmount`]: 300,
+  [`${SP500_ETF_ID}SweepFraction`]: 0.7,
+  [`${INTL_ETF_ID}SweepFraction`]: 1.0,
+}
+
 export const mathieuMasterTrajectory = createTrajectory('Mathieu — Master (10yr)', [
   createScenario({
-    name: 'Master Trajectory',
+    name: 'Working',
     start: START,
-    end: END,
+    end: WORKING_END,
+    events: [{ id: 'evt-employment', at: START, effect: { kind: 'employmentStart', annualSalary: GROSS_ANNUAL_SALARY } }, ...decemberBonusEvents()],
+    parameters: { ...sharedParameters, [`${CASH_ID}CashReserveTarget`]: COMBINED_CASH_RESERVE_TARGET },
+    policies,
+  }),
+  createScenario({
+    name: 'Sell condo & settle',
+    start: SALE_MONTH,
+    end: SALE_MONTH,
     events: [
-      { id: 'evt-employment', at: START, effect: { kind: 'employmentStart', annualSalary: GROSS_ANNUAL_SALARY } },
-      ...decemberBonusEvents(),
-      { id: 'evt-sell-condo', at: END, effect: { kind: 'sellProperty', assetId: CONDO_ID, sellingFeeRate: 0.06 } },
+      // Employment doesn't carry across a Scenario boundary (activeAnnualSalaryAt
+      // only scans the current Scenario's own events) — re-declared here so this
+      // final month still counts as active employment, same pattern
+      // quietMillionaire.ts uses for each new job Scenario.
+      { id: 'evt-employment-final-month', at: SALE_MONTH, effect: { kind: 'employmentStart', annualSalary: GROSS_ANNUAL_SALARY } },
+      { id: 'evt-sell-condo', at: SALE_MONTH, effect: { kind: 'sellProperty', assetId: CONDO_ID, sellingFeeRate: 0.06 } },
     ],
-    parameters: {
-      spending: 7_000,
-      taxRate: 0.32,
-      cashApy: 0.02, // per Mathieu: blended real rate of the combined Chase + Wealthfront balance
-      equityReturn: 0.07, // unused by any Asset here (every equity Asset now has its own growthRate/distributionRate) — kept as a domain-required fallback
-      equityDistributionRate: 0.015,
-      fixedIncomeReturn: 0.01, // per Mathieu: Roth IRA as bonds, "1% real (generous?)"
-      propertyAppreciation: 0.03,
-      // Whole Life: real crediting/dividend rates aren't in the illustration's
-      // narrative summary (only the resulting cash-value schedule is), so these are
-      // conventional participating-WL placeholders, same as prior sessions' tests.
-      wholeLifeCreditingRate: 0.04,
-      wholeLifeDividendRate: 0.015,
-      wholeLifePolicyFee: 0, // real premium is modeled via Asset.premiumAmount above; no separate admin fee figure is known
-      wholeLifeLoanRate: 0.05, // real fixed rate per the illustration; unused (no loan events in this Scenario)
-      wholeLifePuaAnnualMax: 22_000, // per Mathieu: "about 22k for these years (just below MEC limit)" — the illustration's actual unscheduled-PUA cap varies ~$21.5k-$23.2k year to year; held flat here
-      wholeLifePuaChargeRate: 0.10, // per Mathieu: "PUA fee is 10%, so 90% goes to cash value"
-      traditionalRetirementAnnualLimit: 24_500, // approximate 2026 IRS 401(k) employee deferral limit — verify before relying on this figure
-      [`${CASH_ID}CashReserveTarget`]: COMBINED_CASH_RESERVE_TARGET,
-      [`${SP500_ETF_ID}FixedMonthlyAmount`]: 700,
-      [`${INTL_ETF_ID}FixedMonthlyAmount`]: 300,
-      [`${SP500_ETF_ID}SweepFraction`]: 0.7,
-      [`${INTL_ETF_ID}SweepFraction`]: 1.0,
-    },
+    parameters: { ...sharedParameters, [`${CASH_ID}CashReserveTarget`]: POST_SALE_CASH_TARGET },
     policies,
   }),
 ])
