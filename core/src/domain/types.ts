@@ -103,6 +103,7 @@ export type PolicyKind =
   | 'maintainCashReserve'
   | 'contributeUpToMatch'
   | 'contributeUpToLimit'
+  | 'contributeFixedAmount'
   | 'payMortgageExtra'
   | 'investSurplus'
   | 'fundDeficitFromCash'
@@ -115,11 +116,15 @@ export type PolicyKind =
 // targetHoldingContext is what makes contributeUpToMatch/contributeUpToLimit generic:
 // the same policy kind serves a 401(k), a Roth 401(k), an IRA, or an HSA by aiming at
 // a different real destination bucket, not by inventing a policy kind per account type.
+// targetAssetId lets maintainCashReserve target one specific named cash Asset (e.g.
+// "keep $20k at Chase, independently of $25k at Wealthfront") instead of always the
+// first cash Asset found — absent, it falls back to that original behavior unchanged.
 export type Policy = {
   id: string
   kind: PolicyKind
   priority: number
   targetHoldingContext?: HoldingContext
+  targetAssetId?: string
 }
 
 // --- Spending Policy ---

@@ -69,7 +69,7 @@ describe('Whole Life policy loan — interest compounds, unlike a one-time balan
 })
 
 describe('contributeToWholeLifePUA — pays surplus into Paid-Up Additions up to the annual max', () => {
-  const ctx = { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0 }
+  const ctx = { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() }
 
   it('claims up to the monthly-equivalent max, nets out the charge, and adds the rest straight to cash value', () => {
     const state: FinancialState = { asOf: '2026-01', reportingCurrency: 'USD', assets: [{ id: 'wl', name: 'Whole Life', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 100_000 }], liabilities: [] }

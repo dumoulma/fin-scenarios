@@ -1,4 +1,4 @@
-import { addMonths, compareYearMonth, yearOf, type YearMonth } from '../domain/dates.ts'
+import { addMonths, compareYearMonth, monthOf, yearOf, type YearMonth } from '../domain/dates.ts'
 import { assertFinancialStateCurrency, CurrencyInvariantError, type Asset, type CalculationResult, type FinancialState, type Scenario, type Trajectory } from '../domain/types.ts'
 import { applyAssetTypeBehavior, applyLiabilityBehavior, type GetParam } from './assetTypeBehaviors.ts'
 import { activeAnnualSalaryAt, activeEmploymentMatchAt, applyPointEvent, isPointEventActiveAt } from './eventTypeBehaviors.ts'
@@ -84,8 +84,14 @@ export function calculate(
   const lastTick = trajectory.scenarios.at(-1)!.end
   let tick = trajectory.scenarios[0]!.start
   let spendingPolicyState: SpendingPolicyState = null
+  // Calendar-year running total for contributeUpToLimit/contributeFixedAmount,
+  // keyed by targetHoldingContext — reset every January so an annual cap actually
+  // means "per calendar year," not "forever."
+  let annualContributions = new Map<string, number>()
 
   while (compareYearMonth(tick, lastTick) <= 0) {
+    if (monthOf(tick) === 1) annualContributions = new Map()
+
     // 1. identify the Scenario covering this tick
     const scenario = scenarioForTick(trajectory, tick)
     const getParam: GetParam = (name) => inputs.parameterProvider(name, scenario, tick)
@@ -137,6 +143,7 @@ export function calculate(
       grossIncome,
       matchRate,
       matchLimitPercentOfSalary,
+      annualContributions,
     })
 
     // 9. whatever's left (or short) defaults to cash — the next Financial State

@@ -31,3 +31,7 @@ export function compareYearMonth(a: YearMonth, b: YearMonth): number {
 export function yearOf(yearMonth: YearMonth): number {
   return Number(yearMonth.split('-')[0])
 }
+
+export function monthOf(yearMonth: YearMonth): number {
+  return Number(yearMonth.split('-')[1])
+}

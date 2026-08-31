@@ -17,7 +17,7 @@ function baseState(): FinancialState {
 // traditionalRetirementAnnualLimit set far above anything these tests claim, so
 // contributeUpToLimit behaves like the old uncapped contributeToRetirement did.
 const getParam: GetParam = (name) => (name === 'cashReserveMonths' ? 3 : name === 'traditionalRetirementAnnualLimit' ? 12_000_000 : 0)
-const ctx = { spendingAmount: 3000, grossIncome: 6000, matchRate: 0, matchLimitPercentOfSalary: 0 }
+const ctx = { spendingAmount: 3000, grossIncome: 6000, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() }
 
 describe('reconcile', () => {
   it('maintainCashReserve tops up to spendingAmount * cashReserveMonths, no further', () => {

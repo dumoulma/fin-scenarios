@@ -58,6 +58,25 @@ describe('4. a retirement account maps to the correct Holding Context', () => {
     const hsa = initialState.assets.find((a) => a.holdingContext === 'hsa')!
     expect(hsa.value).toBeCloseTo(4200, 2)
   })
+
+  it('recognizes a 401(k) held at a known payroll-401(k) provider whose account name never says "401(k)" (e.g. Guideline)', () => {
+    const { initialState, summary } = importKuberaSnapshot(
+      snapshotOf([
+        {
+          id: 'a1',
+          name: 'Gusto/Guideline - ...3237',
+          sectionName: 'USA',
+          sheetName: 'Retirement Investments',
+          category: 'asset',
+          country: 'US',
+          subType: 'investment',
+          value: { amount: 12_000, currency: 'USD' },
+        },
+      ]),
+    )
+    expect(summary.needsManualInput).toEqual([])
+    expect(initialState.assets.find((a) => a.holdingContext === 'traditionalRetirement')!.value).toBeCloseTo(12_000, 2)
+  })
 })
 
 describe('5. equity is mapped conservatively when regional/ticker detail is unavailable', () => {

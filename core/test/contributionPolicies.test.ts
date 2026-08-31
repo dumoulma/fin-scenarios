@@ -23,7 +23,7 @@ describe('contributeUpToMatch', () => {
   const policy: Policy = { id: 'p', kind: 'contributeUpToMatch', priority: 1, targetHoldingContext: 'traditionalRetirement' }
 
   it('claims the employee contribution up to the match-eligible percent of salary, and adds the employer match on top for free', () => {
-    const ctx = { spendingAmount: 0, grossIncome: 10_000, matchRate: 0.5, matchLimitPercentOfSalary: 0.06 } // match 50% of employee contribution, up to 6% of salary
+    const ctx = { spendingAmount: 0, grossIncome: 10_000, matchRate: 0.5, matchLimitPercentOfSalary: 0.06, annualContributions: new Map() } // match 50% of employee contribution, up to 6% of salary
     const { pool, state } = reconcile(2_000, stateWith401k(), [policy], getParam({}), ctx)
 
     const employeeContribution = 10_000 * 0.06 // 600
@@ -33,7 +33,7 @@ describe('contributeUpToMatch', () => {
   })
 
   it('claims only what the pool has if the pool is smaller than the match-eligible amount (match still applies to the smaller amount actually contributed)', () => {
-    const ctx = { spendingAmount: 0, grossIncome: 10_000, matchRate: 1, matchLimitPercentOfSalary: 0.06 } // dollar-for-dollar match up to 6%
+    const ctx = { spendingAmount: 0, grossIncome: 10_000, matchRate: 1, matchLimitPercentOfSalary: 0.06, annualContributions: new Map() } // dollar-for-dollar match up to 6%
     const { pool, state } = reconcile(200, stateWith401k(), [policy], getParam({}), ctx)
 
     expect(pool).toBe(0)
@@ -41,7 +41,7 @@ describe('contributeUpToMatch', () => {
   })
 
   it('does nothing without a targetHoldingContext, without a matching asset, or on a deficit', () => {
-    const ctx = { spendingAmount: 0, grossIncome: 10_000, matchRate: 0.5, matchLimitPercentOfSalary: 0.06 }
+    const ctx = { spendingAmount: 0, grossIncome: 10_000, matchRate: 0.5, matchLimitPercentOfSalary: 0.06, annualContributions: new Map() }
     const noTarget: Policy = { id: 'p', kind: 'contributeUpToMatch', priority: 1 }
     expect(reconcile(2_000, stateWith401k(), [noTarget], getParam({}), ctx).pool).toBe(2_000)
     expect(reconcile(2_000, { asOf: '2026-01', reportingCurrency: 'USD', assets: [], liabilities: [] }, [policy], getParam({}), ctx).pool).toBe(2_000)
@@ -51,7 +51,7 @@ describe('contributeUpToMatch', () => {
 
 describe('contributeUpToLimit', () => {
   const policy: Policy = { id: 'p', kind: 'contributeUpToLimit', priority: 1, targetHoldingContext: 'traditionalRetirement' }
-  const ctx = { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0 }
+  const ctx = { spendingAmount: 0, grossIncome: 0, matchRate: 0, matchLimitPercentOfSalary: 0, annualContributions: new Map() }
 
   it('claims up to the monthly-equivalent of the bucket-specific annual limit, looked up by targetHoldingContext', () => {
     const { pool, state } = reconcile(5_000, stateWith401k(), [policy], getParam({ traditionalRetirementAnnualLimit: 24_000 }), ctx) // $2,000/mo
