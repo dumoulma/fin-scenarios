@@ -4,9 +4,11 @@ import {
   addScenario,
   createScenario,
   createTrajectory,
+  deleteScenario,
   duplicateScenario,
   duplicateScenarioWithinTrajectory,
   duplicateTrajectory,
+  insertScenario,
   modifyScenario,
   promoteToMaster,
   removeScenario,
@@ -14,6 +16,7 @@ import {
   replaceScenario,
   resizeScenario,
 } from '../src/domain/trajectory.ts'
+import { monthsBetween } from '../src/domain/dates.ts'
 import { trajectoryEnd, trajectoryStart, type Scenario } from '../src/domain/types.ts'
 
 function scenario(overrides: Partial<Scenario> & { name: string; start: string; end: string }): Scenario {
@@ -134,6 +137,66 @@ describe('resizeScenario — boundary-drag semantics', () => {
   it('refuses a resize that would zero out or invert the immediate neighbor', () => {
     const t = threeJobTrajectory()
     expect(() => resizeScenario(t, t.scenarios[0]!.id, 60 + 60 + 1)).toThrow(TrajectoryInvariantError)
+  })
+})
+
+describe('insertScenario — boundary-drag semantics, inverse of resize', () => {
+  it("splices a new Scenario in after the given one, taking its duration from the immediate successor whose own end stays fixed", () => {
+    const t = threeJobTrajectory()
+    const updated = insertScenario(t, t.scenarios[0]!.id, { name: 'Sabbatical', parameters: { spending: 0, taxRate: 0 }, policies: [], events: [] }, 24) // 2 years
+
+    expect(updated.scenarios.map((s) => s.name)).toEqual(['Job 1', 'Sabbatical', 'Job 2', 'Job 3'])
+    expect(updated.scenarios[0]!.end).toBe(t.scenarios[0]!.end) // untouched
+    expect(updated.scenarios[1]!.start).toBe('2031-01')
+    expect(updated.scenarios[1]!.end).toBe('2032-12') // 24 months
+    expect(updated.scenarios[2]!.start).toBe('2033-01') // absorbed the 24 months
+    expect(updated.scenarios[2]!.end).toBe(t.scenarios[1]!.end) // Job 2's own end is unchanged
+    expect(updated.scenarios[3]!).toEqual(t.scenarios[2]!) // untouched, no cascade
+  })
+
+  it('simply extends the Trajectory when inserting after the last Scenario', () => {
+    const t = threeJobTrajectory()
+    const last = t.scenarios[2]!
+    const updated = insertScenario(t, last.id, { name: 'Retirement', parameters: { spending: 0, taxRate: 0 }, policies: [], events: [] }, 12)
+    expect(updated.scenarios).toHaveLength(4)
+    expect(updated.scenarios[3]!.name).toBe('Retirement')
+    expect(updated.scenarios[3]!.start).toBe('2041-01')
+    expect(updated.scenarios[3]!.end).toBe('2041-12')
+  })
+
+  it('refuses an insert that would zero out or invert the immediate successor', () => {
+    const t = threeJobTrajectory()
+    expect(() =>
+      insertScenario(t, t.scenarios[0]!.id, { name: 'Too long', parameters: { spending: 0, taxRate: 0 }, policies: [], events: [] }, 60 + 1),
+    ).toThrow(TrajectoryInvariantError)
+  })
+})
+
+describe('deleteScenario — boundary-drag semantics, the inverse of insertScenario', () => {
+  it('gives the freed duration to the following Scenario, keeping the Trajectory\'s total length and everything else fixed', () => {
+    const t = threeJobTrajectory()
+    const updated = deleteScenario(t, t.scenarios[1]!.id) // delete Job 2
+
+    expect(updated.scenarios.map((s) => s.name)).toEqual(['Job 1', 'Job 3'])
+    expect(updated.scenarios[0]!).toEqual(t.scenarios[0]!) // untouched
+    expect(updated.scenarios[1]!.start).toBe(t.scenarios[1]!.start) // Job 3 slides back to where Job 2 used to start
+    expect(updated.scenarios[1]!.end).toBe(t.scenarios[2]!.end) // Job 3's own end is unchanged — total length preserved
+    expect(monthsBetween(updated.scenarios[1]!.start, updated.scenarios[1]!.end)).toBe(monthsBetween(t.scenarios[1]!.start, t.scenarios[1]!.end) + monthsBetween(t.scenarios[2]!.start, t.scenarios[2]!.end))
+  })
+
+  it('gives the freed duration to the preceding Scenario when deleting the last one, since there is no successor', () => {
+    const t = threeJobTrajectory()
+    const updated = deleteScenario(t, t.scenarios[2]!.id) // delete Job 3, the last one
+
+    expect(updated.scenarios.map((s) => s.name)).toEqual(['Job 1', 'Job 2'])
+    expect(updated.scenarios[0]!).toEqual(t.scenarios[0]!) // untouched
+    expect(updated.scenarios[1]!.start).toBe(t.scenarios[1]!.start) // unchanged
+    expect(updated.scenarios[1]!.end).toBe(t.scenarios[2]!.end) // absorbed Job 3's time, trajectory end unchanged
+  })
+
+  it('refuses to delete the last remaining Scenario', () => {
+    const single = createTrajectory('Solo', [scenario({ name: 'Only', start: '2026-01', end: '2026-12' })])
+    expect(() => deleteScenario(single, single.scenarios[0]!.id)).toThrow(TrajectoryInvariantError)
   })
 })
 

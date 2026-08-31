@@ -22,7 +22,7 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
     const shortfall = Math.max(0, target - cash.value)
     const claim = Math.min(pool, shortfall)
     if (claim <= 0) return { pool, state }
-    const assets = state.assets.map((a) => (a.assetType === 'cash' ? { ...a, value: a.value + claim } : a))
+    const assets = state.assets.map((asset) => (asset.id === cash.id ? { ...asset, value: asset.value + claim } : asset))
     return { pool: pool - claim, state: { ...state, assets } }
   },
 
@@ -111,6 +111,19 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
     const claim = Math.min(-pool, equity.value)
     if (claim <= 0) return { pool, state }
     const assets = state.assets.map((a) => (a.id === equity.id ? { ...a, value: a.value - claim } : a))
+    return { pool: pool + claim, state: { ...state, assets } }
+  },
+
+  // Same shape as fundDeficitFromEquitySale, targeting fixedIncome instead — the
+  // "bonds" rung of a cash -> bonds -> equity retirement bucket strategy is just a
+  // matter of priority ordering these three, per docs/design/dynamic-spending.md.
+  fundDeficitFromFixedIncomeSale: (pool, state) => {
+    if (pool >= 0) return { pool, state }
+    const bonds = state.assets.find((a) => a.assetType === 'fixedIncome')
+    if (!bonds) return { pool, state }
+    const claim = Math.min(-pool, bonds.value)
+    if (claim <= 0) return { pool, state }
+    const assets = state.assets.map((a) => (a.id === bonds.id ? { ...a, value: a.value - claim } : a))
     return { pool: pool + claim, state: { ...state, assets } }
   },
 

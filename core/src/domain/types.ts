@@ -108,6 +108,7 @@ export type PolicyKind =
   | 'fundDeficitFromCash'
   | 'fundDeficitFromWholeLifeLoan'
   | 'fundDeficitFromEquitySale'
+  | 'fundDeficitFromFixedIncomeSale'
   | 'fundDeficitFromDebt'
   | 'contributeToWholeLifePUA'
 
@@ -121,6 +122,28 @@ export type Policy = {
   targetHoldingContext?: HoldingContext
 }
 
+// --- Spending Policy ---
+// docs/design/dynamic-spending.md: Spending remains a Scenario Parameter; a
+// Spending Policy is simply a way of determining its value for a calculation
+// period. Fixed spending (the default, `Scenario.spendingPolicy` absent) needs
+// none of this — it behaves exactly as `parameters.spending` always has.
+
+export type SpendingPolicyKind = 'percentOfPortfolio' | 'guardrails'
+
+export type SpendingPolicy = {
+  kind: SpendingPolicyKind
+  /** How often the amount is recomputed — 1 = monthly, 3 = quarterly, 12 = annually. */
+  cadenceMonths: number
+  /** The starting monthly-equivalent amount, in effect until the first recompute. */
+  baseAnnualSpending: number
+  /** percentOfPortfolio only — annual withdrawal as a fraction of the investable portfolio. */
+  withdrawalPercent?: number
+  /** guardrails only — annualized withdrawal-rate bands and the adjustment applied when crossed. */
+  upperGuardrail?: number
+  lowerGuardrail?: number
+  adjustmentPercent?: number
+}
+
 // --- Scenario & Trajectory ---
 
 export type Scenario = {
@@ -131,6 +154,7 @@ export type Scenario = {
   events: Event[]
   parameters: ScenarioParameters
   policies: Policy[]
+  spendingPolicy?: SpendingPolicy
 }
 
 export type Trajectory = {
