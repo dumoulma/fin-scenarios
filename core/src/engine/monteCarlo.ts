@@ -1,5 +1,7 @@
+import type { YearMonth } from '../domain/dates.ts'
 import { netWorth, type CalculationResult, type FinancialState, type Trajectory } from '../domain/types.ts'
 import { calculate, type ParameterProvider } from './calculate.ts'
+import { createStochasticParameterProvider, type Volatility } from './stochasticParameterProvider.ts'
 
 export type MonteCarloResult = {
   results: CalculationResult[]
@@ -46,4 +48,65 @@ export function runMonteCarlo(
   const avg = mean(finalNetWorths)
 
   return { results, finalNetWorths, median: median(sorted), mean: avg, stdDev: stdDev(finalNetWorths, avg) }
+}
+
+// --- Stochastic convenience path (normal-distribution volatility, every year
+// summarized, not just the final one) ---
+
+export type StochasticMonteCarloConfig = {
+  trials: number
+  volatility: Volatility
+  /** Base seed — trial N uses seed + N, so every trial gets its own reproducible
+   * draw sequence while the whole run stays reproducible from one number. */
+  seed?: number
+}
+
+export type YearlyDistributionSummary = {
+  asOf: YearMonth
+  mean: number
+  stdDev: number
+  median: number
+  p10: number
+  p90: number
+}
+
+export type StochasticMonteCarloOutcome = {
+  trials: number
+  /** [trialIndex][yearIndex] — raw per-trial net worth series, for custom
+   * aggregation or a fan chart the summary alone can't produce. */
+  annualNetWorthByTrial: number[][]
+  /** Per-year distribution across all trials, same order as one trial's annual
+   * snapshots — richer than MonteCarloResult's final-year-only stats, for a
+   * fan-chart-style visualization over the whole Trajectory. */
+  summary: YearlyDistributionSummary[]
+}
+
+function percentile(sortedAscending: number[], p: number): number {
+  const index = (p / 100) * (sortedAscending.length - 1)
+  const lower = Math.floor(index)
+  const upper = Math.ceil(index)
+  if (lower === upper) return sortedAscending[lower]!
+  const weight = index - lower
+  return sortedAscending[lower]! * (1 - weight) + sortedAscending[upper]! * weight
+}
+
+/**
+ * The normal-distribution convenience path: wires createStochasticParameterProvider
+ * into runMonteCarlo, then re-aggregates every year (not just the final one) from
+ * the full per-trial results runMonteCarlo already retains.
+ */
+export function runStochasticMonteCarlo(initialState: FinancialState, trajectory: Trajectory, config: StochasticMonteCarloConfig): StochasticMonteCarloOutcome {
+  const baseSeed = config.seed ?? 1
+  const outcome = runMonteCarlo(initialState, trajectory, (runIndex) => createStochasticParameterProvider(config.volatility, baseSeed + runIndex), config.trials)
+
+  const annualNetWorthByTrial = outcome.results.map((result) => result.annual.map(netWorth))
+  const asOfByYear = outcome.results[0]!.annual.map((snapshot) => snapshot.asOf)
+  const summary = asOfByYear.map((asOf, yearIndex) => {
+    const values = annualNetWorthByTrial.map((trial) => trial[yearIndex]!)
+    const yearMean = mean(values)
+    const sorted = [...values].sort((a, b) => a - b)
+    return { asOf, mean: yearMean, stdDev: stdDev(values, yearMean), median: percentile(sorted, 50), p10: percentile(sorted, 10), p90: percentile(sorted, 90) }
+  })
+
+  return { trials: config.trials, annualNetWorthByTrial, summary }
 }
