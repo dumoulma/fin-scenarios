@@ -26,6 +26,14 @@ export type Asset = {
    * and distribute differently. Falls back to the Scenario parameter when absent. */
   growthRate?: number
   distributionRate?: number
+  /** Like growthRate/distributionRate, but names a Scenario Parameter to read via
+   * getParam instead of a literal value — takes priority over the literal field
+   * if both are set. A literal override is a fixed number forever; a Monte Carlo
+   * stochastic Input Generator only ever drives getParam-sourced values, so an
+   * Asset that needs to be randomized (rather than pinned) has to go through a
+   * named parameter instead of a literal growthRate/distributionRate. */
+  growthRateParameter?: string
+  distributionRateParameter?: string
   /** Only meaningful for wholeLifeInsurance — this contract's own premium
    * schedule. A real policy's premium is a mandatory cost, not free growth;
    * absent means no premium is due (e.g. an already paid-up policy). */
