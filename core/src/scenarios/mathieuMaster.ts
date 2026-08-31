@@ -30,6 +30,15 @@ const COMBINED_CASH_RESERVE_TARGET = 45_000
 // balances.
 const SCHWAB_TAXABLE_BROKERAGE_TOTAL = 166_011.11
 
+// Real 15-year fixed mortgage: originated 6/2026 at 3.99%, $398,000 remaining as of
+// the 8/2026 snapshot (2 months elapsed, 178 of the original 180 months left).
+// Kubera itself only reports the current balance, not loan terms, so the rate/term
+// are Mathieu's own figures, not importer output — monthlyPayment is the standard
+// amortization payment for that balance/rate/remaining-term, not a guess.
+const MORTGAGE_BALANCE = 398_000
+const MORTGAGE_ANNUAL_RATE = 0.0399
+const MORTGAGE_MONTHLY_PAYMENT = 2_966.13
+
 export const initialState: FinancialState = {
   asOf: '2026-08',
   reportingCurrency: 'USD',
@@ -37,10 +46,18 @@ export const initialState: FinancialState = {
     { id: CASH_ID, name: 'Cash (Chase + Wealthfront)', assetType: 'cash', holdingContext: 'none', country: 'US', currency: 'USD', value: 38_694.22 },
     // Listed before intlEtf so investSurplus's first-match-by-holdingContext lands
     // the "everything left over" catch-all here (task item 6's unspecified default).
-    { id: SP500_ETF_ID, name: 'Schwab — S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.7, growthRate: 0.08, distributionRate: 0.015 },
-    { id: INTL_ETF_ID, name: 'Schwab — International ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.3, growthRate: 0.06, distributionRate: 0.025 },
-    { id: 'guideline-401k', name: 'Gusto/Guideline 401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 49_939.48 },
-    { id: 'schwab-roth-ira', name: 'Charles Schwab — Roth IRA', assetType: 'equity', holdingContext: 'rothRetirement', country: 'US', currency: 'USD', value: 7_320.82 },
+    { id: SP500_ETF_ID, name: 'Schwab — S&P 500 ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.7, growthRate: 0.05, distributionRate: 0.015 },
+    { id: INTL_ETF_ID, name: 'Schwab — International ETF', assetType: 'equity', holdingContext: 'taxableBrokerage', country: 'US', currency: 'USD', value: SCHWAB_TAXABLE_BROKERAGE_TOTAL * 0.3, growthRate: 0.05, distributionRate: 0.025 },
+    // Assumed invested 70/30 US/international, same as the taxable Schwab account —
+    // real growth rates are equal (5%/5%) so the blend is just 0.05; only the
+    // distribution yield actually changes with the mix (0.7*1.5% + 0.3*2.5%).
+    { id: 'guideline-401k', name: 'Gusto/Guideline 401(k)', assetType: 'equity', holdingContext: 'traditionalRetirement', country: 'US', currency: 'USD', value: 49_939.48, growthRate: 0.05, distributionRate: 0.018 },
+    // Modeled as fixed income (bonds), not equity — per Mathieu, at a generous 1%
+    // real return. fixedIncome's asset-type behavior has no per-asset growthRate
+    // override (only equity does), so this rate is set via the scenario-level
+    // fixedIncomeReturn parameter below; fine since this is the only fixedIncome
+    // Asset in the Scenario.
+    { id: 'schwab-roth-ira', name: 'Charles Schwab — Roth IRA', assetType: 'fixedIncome', holdingContext: 'rothRetirement', country: 'US', currency: 'USD', value: 7_320.82 },
     { id: CONDO_ID, name: '530 Gregory Ave c311', assetType: 'realEstate', holdingContext: 'none', country: 'US', currency: 'USD', value: 673_200 },
     // premiumAmount is the real $1,500/mo Guardian modal premium (Guard-O-Matic),
     // confirmed against Mathieu's actual inforce illustration — NOT a separate
@@ -51,16 +68,23 @@ export const initialState: FinancialState = {
     { id: GUARDIAN_WL_ID, name: 'Guardian Life — Whole Life 95', assetType: 'wholeLifeInsurance', holdingContext: 'none', country: 'US', currency: 'USD', value: 166_780.55, premiumAmount: 18_000 },
   ],
   liabilities: [
-    // No interestRate/monthlyPayment: Kubera reports only the current balance, not
-    // loan terms, so no scheduled amortization is modeled — the balance stays flat
-    // until the condo sale pays it off at the end. Real household mortgage P&I is
-    // assumed folded into the flat $7k/mo spending figure instead.
-    { id: 'mortgage', name: 'Mortgage', kind: 'mortgage', balance: 388_327.21, linkedAssetId: CONDO_ID },
+    {
+      id: 'mortgage',
+      name: 'Mortgage',
+      kind: 'mortgage',
+      balance: MORTGAGE_BALANCE,
+      linkedAssetId: CONDO_ID,
+      interestRate: MORTGAGE_ANNUAL_RATE,
+      monthlyPayment: MORTGAGE_MONTHLY_PAYMENT,
+    },
   ],
 }
 
 const GROSS_ANNUAL_SALARY = 270_000
-const ANNUAL_BONUS = 27_000
+const ANNUAL_BONUS_GROSS = 27_000
+// Supplemental-wage withholding on a bonus is a real, distinct rate from ordinary
+// income tax (this household's flat 32%) — per Mathieu, 34%.
+const BONUS_TAX_RATE = 0.34
 const START = '2026-09'
 const END = '2036-08' // 120 months — exactly 10 years from the import date
 
@@ -69,14 +93,28 @@ const policies: Policy[] = [
   { id: 'pol-cash-reserve', kind: 'maintainCashReserve', priority: 2, targetAssetId: CASH_ID },
   { id: 'pol-sp500-dca', kind: 'contributeFixedAmount', priority: 3, targetAssetId: SP500_ETF_ID },
   { id: 'pol-intl-dca', kind: 'contributeFixedAmount', priority: 4, targetAssetId: INTL_ETF_ID },
-  { id: 'pol-pua-max', kind: 'contributeToWholeLifePUA', priority: 5 },
+  // contributeToWholeLifePUAAnnually, not the plain contributeToWholeLifePUA: the
+  // real PUA rider's cap resets on Guardian's April policy anniversary, not the
+  // calendar year, and (per Mathieu) it's normally funded from the December bonus
+  // rather than smoothed evenly across paychecks — this policy claims no more than
+  // one real annual cap, with no monthly division, and resetMonth: 4 tracks that
+  // cap against the real policy year instead of January.
+  { id: 'pol-pua-annual', kind: 'contributeToWholeLifePUAAnnually', priority: 5, resetMonth: 4 },
   { id: 'pol-surplus', kind: 'investSurplus', priority: 6 },
+  // Sweeps whatever sits above the $45k cash target (mainly interest drift, now
+  // that the December bonus routes through bonusIncome/the pool instead of
+  // landing straight in cash) into the same 70/30 split as the Schwab DCA above.
+  // Fractions 0.7 then 1.0 split the excess 70/30 — see sweepCashAboveTarget's
+  // own comment in engine/policies.ts for why that pair of fractions works
+  // without the two Policies needing to share any state.
+  { id: 'pol-sweep-sp500', kind: 'sweepCashAboveTarget', priority: 7, sourceAssetId: CASH_ID, targetAssetId: SP500_ETF_ID },
+  { id: 'pol-sweep-intl', kind: 'sweepCashAboveTarget', priority: 8, sourceAssetId: CASH_ID, targetAssetId: INTL_ETF_ID },
 ]
 
-function decemberBonusEvents(): { id: string; at: `${number}-${string}`; effect: { kind: 'oneTimeCashFlow'; amount: number } }[] {
+function decemberBonusEvents(): { id: string; at: `${number}-${string}`; effect: { kind: 'bonusIncome'; grossAmount: number; taxRate: number } }[] {
   const events = []
   for (let year = 2026; year <= 2035; year++) {
-    events.push({ id: `evt-bonus-${year}`, at: `${year}-12` as const, effect: { kind: 'oneTimeCashFlow' as const, amount: ANNUAL_BONUS } })
+    events.push({ id: `evt-bonus-${year}`, at: `${year}-12` as const, effect: { kind: 'bonusIncome' as const, grossAmount: ANNUAL_BONUS_GROSS, taxRate: BONUS_TAX_RATE } })
   }
   return events
 }
@@ -94,9 +132,10 @@ export const mathieuMasterTrajectory = createTrajectory('Mathieu — Master (10y
     parameters: {
       spending: 7_000,
       taxRate: 0.32,
-      cashApy: 0.04, // blended Chase/Wealthfront rate — not a real per-institution APY
-      equityReturn: 0.07, // 401(k)/Roth IRA default; the two Schwab ETFs override this per-asset above
+      cashApy: 0.02, // per Mathieu: blended real rate of the combined Chase + Wealthfront balance
+      equityReturn: 0.07, // unused by any Asset here (every equity Asset now has its own growthRate/distributionRate) — kept as a domain-required fallback
       equityDistributionRate: 0.015,
+      fixedIncomeReturn: 0.01, // per Mathieu: Roth IRA as bonds, "1% real (generous?)"
       propertyAppreciation: 0.03,
       // Whole Life: real crediting/dividend rates aren't in the illustration's
       // narrative summary (only the resulting cash-value schedule is), so these are
@@ -111,6 +150,8 @@ export const mathieuMasterTrajectory = createTrajectory('Mathieu — Master (10y
       [`${CASH_ID}CashReserveTarget`]: COMBINED_CASH_RESERVE_TARGET,
       [`${SP500_ETF_ID}FixedMonthlyAmount`]: 700,
       [`${INTL_ETF_ID}FixedMonthlyAmount`]: 300,
+      [`${SP500_ETF_ID}SweepFraction`]: 0.7,
+      [`${INTL_ETF_ID}SweepFraction`]: 1.0,
     },
     policies,
   }),
