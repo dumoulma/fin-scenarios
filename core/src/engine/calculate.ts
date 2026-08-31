@@ -84,9 +84,9 @@ export function calculate(
   const lastTick = trajectory.scenarios.at(-1)!.end
   let tick = trajectory.scenarios[0]!.start
   let spendingPolicyState: SpendingPolicyState = null
-  // Calendar-year running total for contributeUpToLimit/contributeFixedAmount,
-  // keyed by targetHoldingContext — reset every January so an annual cap actually
-  // means "per calendar year," not "forever."
+  // Running total per annual-cap Policy, keyed by annualContributionsKeyFor — see
+  // the per-policy reset below (each key clears on its own Policy.resetMonth, not
+  // a single blanket wipe).
   let annualContributions = new Map<string, number>()
 
   while (compareYearMonth(tick, lastTick) <= 0) {
