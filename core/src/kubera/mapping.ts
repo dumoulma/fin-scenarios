@@ -12,12 +12,17 @@ const FOUR_OH_ONE_K_PATTERN = /401\s*\(?k\)?/i
 const IRA_PATTERN = /\bira\b/i
 const HSA_PATTERN = /\bhsa\b|health savings/i
 const WHOLE_LIFE_PATTERN = /whole\s*life/i
+// Payroll-401(k) platforms whose account names don't literally say "401(k)" — a
+// real gap found against a real account (Gusto/Guideline). Inherently incomplete;
+// an unlisted provider still correctly falls to needsManualInput rather than a
+// silent wrong guess.
+const KNOWN_401K_PROVIDER_PATTERN = /guideline/i
 
 function classifyRetirementAccount(item: KuberaItem): Classification {
   if (ROTH_PATTERN.test(item.name)) {
     return { outcome: 'recognizedAsset', assetType: 'equity', holdingContext: 'rothRetirement' }
   }
-  if (FOUR_OH_ONE_K_PATTERN.test(item.name) || IRA_PATTERN.test(item.name)) {
+  if (FOUR_OH_ONE_K_PATTERN.test(item.name) || IRA_PATTERN.test(item.name) || KNOWN_401K_PROVIDER_PATTERN.test(item.name)) {
     return { outcome: 'recognizedAsset', assetType: 'equity', holdingContext: 'traditionalRetirement' }
   }
   return {

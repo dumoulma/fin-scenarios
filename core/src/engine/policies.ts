@@ -1,7 +1,15 @@
 import type { GetParam } from './assetTypeBehaviors.ts'
 import type { FinancialState, Policy, PolicyKind } from '../domain/types.ts'
 
-export type PolicyContext = { spendingAmount: number; grossIncome: number; matchRate: number; matchLimitPercentOfSalary: number }
+// annualContributions is engine-internal bookkeeping, not FinancialState — a
+// calendar-year running total per targetHoldingContext, shared across whichever
+// Policies claim into it (contributeUpToLimit, contributeFixedAmount), so a
+// capped account can't be over-funded by combining more than one Policy against
+// it. Mutated in place by convention: calculate.ts owns one Map per calendar
+// year (reset every January) and passes the same reference through every tick's
+// ctx, rather than threading it through every handler's return value for one
+// cross-cutting concern.
+export type PolicyContext = { spendingAmount: number; grossIncome: number; matchRate: number; matchLimitPercentOfSalary: number; annualContributions: Map<string, number> }
 export type PolicyHandler = (pool: number, state: FinancialState, getParam: GetParam, ctx: PolicyContext, policy: Policy) => { pool: number; state: FinancialState }
 
 /**
@@ -14,11 +22,15 @@ export type PolicyHandler = (pool: number, state: FinancialState, getParam: GetP
  * without changing this function.
  */
 const policyHandlers: Record<PolicyKind, PolicyHandler> = {
-  maintainCashReserve: (pool, state, getParam, ctx) => {
+  // targetAssetId points this at one specific named cash Asset (e.g. "Chase") with
+  // its own flat-dollar target (`${targetAssetId}CashReserveTarget`) — this is what
+  // lets two of these Policies maintain two independent buffers. Without it, falls
+  // back unchanged to the original "first cash Asset, cashReserveMonths * spending" behavior.
+  maintainCashReserve: (pool, state, getParam, ctx, policy) => {
     if (pool <= 0) return { pool, state }
-    const cash = state.assets.find((a) => a.assetType === 'cash')
+    const cash = policy.targetAssetId ? state.assets.find((a) => a.id === policy.targetAssetId) : state.assets.find((a) => a.assetType === 'cash')
     if (!cash) return { pool, state }
-    const target = getParam('cashReserveMonths') * ctx.spendingAmount
+    const target = policy.targetAssetId ? getParam(`${policy.targetAssetId}CashReserveTarget`) : getParam('cashReserveMonths') * ctx.spendingAmount
     const shortfall = Math.max(0, target - cash.value)
     const claim = Math.min(pool, shortfall)
     if (claim <= 0) return { pool, state }
@@ -44,15 +56,42 @@ const policyHandlers: Record<PolicyKind, PolicyHandler> = {
 
   // Claims up to the monthly-equivalent of the bucket's own annual contribution
   // limit — `${targetHoldingContext}AnnualLimit` — so a 401(k) and a Roth IRA are
-  // the same policy kind with different caps, not different code.
-  contributeUpToLimit: (pool, state, getParam, _ctx, policy) => {
+  // the same policy kind with different caps, not different code. Also respects
+  // ctx.annualContributions: if contributeFixedAmount (or another instance of this
+  // same kind) already claimed part of this calendar year's room against the same
+  // targetHoldingContext, only what's left of the annual cap is available here —
+  // an account can't be over-funded just because two Policies both target it.
+  contributeUpToLimit: (pool, state, getParam, ctx, policy) => {
     if (pool <= 0 || !policy.targetHoldingContext) return { pool, state }
     const account = state.assets.find((a) => a.holdingContext === policy.targetHoldingContext)
     if (!account) return { pool, state }
-    const monthlyLimit = getParam(`${policy.targetHoldingContext}AnnualLimit`) / 12
-    const claim = Math.min(pool, monthlyLimit)
+    const annualLimit = getParam(`${policy.targetHoldingContext}AnnualLimit`)
+    const alreadyContributed = ctx.annualContributions.get(policy.targetHoldingContext) ?? 0
+    const remainingCap = Math.max(0, annualLimit - alreadyContributed)
+    const claim = Math.min(pool, annualLimit / 12, remainingCap)
     if (claim <= 0) return { pool, state }
     const assets = state.assets.map((a) => (a.id === account.id ? { ...a, value: a.value + claim } : a))
+    ctx.annualContributions.set(policy.targetHoldingContext, alreadyContributed + claim)
+    return { pool: pool - claim, state: { ...state, assets } }
+  },
+
+  // Moves exactly its configured monthly amount, not the whole pool — unlike
+  // investSurplus, a fixed DCA contribution shouldn't grow just because there's
+  // more surplus this month. Shares the same calendar-year running total as
+  // contributeUpToLimit when both target the same account, via the same
+  // `${targetHoldingContext}AnnualLimit` (absent means no annual cap applies here).
+  contributeFixedAmount: (pool, state, getParam, ctx, policy) => {
+    if (pool <= 0 || !policy.targetHoldingContext) return { pool, state }
+    const account = state.assets.find((a) => a.holdingContext === policy.targetHoldingContext)
+    if (!account) return { pool, state }
+    const fixedAmount = getParam(`${policy.targetHoldingContext}FixedMonthlyAmount`)
+    const annualLimit = getParam(`${policy.targetHoldingContext}AnnualLimit`)
+    const alreadyContributed = ctx.annualContributions.get(policy.targetHoldingContext) ?? 0
+    const remainingCap = annualLimit > 0 ? Math.max(0, annualLimit - alreadyContributed) : Infinity
+    const claim = Math.min(pool, fixedAmount, remainingCap)
+    if (claim <= 0) return { pool, state }
+    const assets = state.assets.map((a) => (a.id === account.id ? { ...a, value: a.value + claim } : a))
+    ctx.annualContributions.set(policy.targetHoldingContext, alreadyContributed + claim)
     return { pool: pool - claim, state: { ...state, assets } }
   },
 
